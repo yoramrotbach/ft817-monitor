@@ -7,7 +7,7 @@
     "dev": "tauri dev",
     "build": "tauri build",
     "demo": "tauri dev -- -- --demo",
-    "test": "cd src-tauri && cargo test"
+    "test": "cargo test --workspace"
   },
   "license": "MIT",
   "devDependencies": {

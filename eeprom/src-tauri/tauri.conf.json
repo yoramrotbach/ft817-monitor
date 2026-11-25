@@ -1,0 +1,40 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "817 EEPROM",
+  "version": "0.1.0",
+  "identifier": "net.4z1yr.ft817eeprom",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "817 EEPROM — backup & restore",
+        "width": 760,
+        "height": 720,
+        "minWidth": 600,
+        "minHeight": 520,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Utility",
+    "shortDescription": "EEPROM backup and restore for the Yaesu FT-817/818",
+    "longDescription": "Backs up the complete EEPROM of a Yaesu FT-817, FT-817ND or FT-818 (calibration, settings and memories) over CAT, and restores it with verified writes that never touch the protected header bytes.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

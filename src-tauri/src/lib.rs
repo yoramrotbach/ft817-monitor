@@ -1,10 +1,8 @@
 //! 817 Monitor: a read-only desktop CAT monitor for the Yaesu FT-817/818.
 
-pub mod cat;
+pub use ft817_cat::{cat, sim, transport};
 pub mod poller;
-pub mod sim;
 pub mod state;
-pub mod transport;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};

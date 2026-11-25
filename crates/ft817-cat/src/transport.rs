@@ -2,6 +2,7 @@
 
 use crate::sim::SimRadio;
 use std::io::{self, Read, Write};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 pub trait CatPort: Send {
@@ -73,13 +74,25 @@ impl CatPort for SerialCat {
 
 // ---------------------------------------------------------------- demo
 
+/// A link to the built-in simulated radio. The radio is shared (Arc) so a
+/// demo session can keep its EEPROM between operations.
 pub struct DemoCat {
-    radio: SimRadio,
+    radio: Arc<Mutex<SimRadio>>,
+    delay: Duration,
 }
 
 impl DemoCat {
     pub fn new() -> Self {
-        Self { radio: SimRadio::new() }
+        Self::with_radio(Arc::new(Mutex::new(SimRadio::new())))
+    }
+    pub fn with_radio(radio: Arc<Mutex<SimRadio>>) -> Self {
+        // Roughly the wire time of 5 + up to 5 bytes at 38400 baud, 8N2.
+        Self { radio, delay: Duration::from_millis(3) }
+    }
+    /// No artificial wire delay (tests).
+    pub fn instant(mut self) -> Self {
+        self.delay = Duration::ZERO;
+        self
     }
 }
 
@@ -91,9 +104,14 @@ impl Default for DemoCat {
 
 impl CatPort for DemoCat {
     fn transact(&mut self, frame: [u8; 5], _expected: usize) -> io::Result<Vec<u8>> {
-        // Roughly the wire time of 5 + up to 5 bytes at 38400 baud, 8N2.
-        std::thread::sleep(Duration::from_millis(3));
-        Ok(self.radio.respond(&frame))
+        if !self.delay.is_zero() {
+            std::thread::sleep(self.delay);
+        }
+        let r = self.radio.lock().unwrap().respond(&frame);
+        if r.is_empty() {
+            return Err(io::Error::new(io::ErrorKind::TimedOut, "timed out"));
+        }
+        Ok(r)
     }
 }
 

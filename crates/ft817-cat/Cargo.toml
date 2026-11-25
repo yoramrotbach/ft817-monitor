@@ -1,0 +1,10 @@
+[package]
+name = "ft817-cat"
+version = "0.1.0"
+description = "Yaesu FT-817/818 CAT protocol: read-only commands, decoders, serial link and a simulated radio"
+license = "MIT"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serialport = "4"

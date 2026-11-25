@@ -1,3 +1,12 @@
+# FT-817 tools: 817 Monitor and 817 EEPROM
+
+Two free desktop apps for the **Yaesu FT-817, FT-817ND and FT-818**, for Windows, macOS and Linux (including Raspberry Pi):
+
+- **[817 Monitor](#817-monitor)**: a large LCD-style display of what the radio is doing. Strictly read-only.
+- **[817 EEPROM](#817-eeprom)**: back up the radio's whole EEPROM (calibration, settings, memories) and restore it with verified writes.
+
+They are separate apps on purpose: the monitor contains no code that can write to the radio.
+
 # 817 Monitor
 
 A desktop CAT monitor for the **Yaesu FT-817, FT-817ND and FT-818**. It shows what the radio is doing on a large, LCD-style panel: frequency, mode, S-meter, transmit meters and front-panel settings. The idea comes from hardware CAT displays for the 817, but this is an independent design for Windows, macOS and Linux (including Raspberry Pi).
@@ -46,6 +55,32 @@ Why it's optional: `0xBE`, one value away, is the factory reset, which erases th
 
 Published sources disagree on how the `0xBD` reply is packed. If SWR moves with your voice and ALC follows the antenna, switch "Reply layout" in Settings.
 
+# 817 EEPROM
+
+![Calibration values from a backup](docs/eeprom-calibration.png)
+
+The FT-817's EEPROM holds everything the radio knows about itself, including the **76 soft-calibration values** set at the factory. If those are lost (a factory reset, a bad write, a failing EEPROM), the radio is out of calibration, and redoing the alignment is hard without the original numbers. 817 EEPROM keeps a verified copy and can put it back.
+
+**Back up.** Reads the whole EEPROM (6,438 bytes on the FT-817; the end is detected automatically) twice and reconciles any difference by re-reading, so a cable glitch can't give you a silently bad backup. Each backup is saved automatically in the app's backups folder as a `.817ee` file: JSON with a readable hex dump and a SHA-256 checksum. The calibration values are shown by menu name and can be copied as text, so it's easy to keep a written copy as well.
+
+**Restore.** Open a backup, press *Compare with radio*, review what will change, confirm, restore. Its safeguards:
+
+| Safeguard | Why |
+|---|---|
+| Addresses 0x00–0x05 are never written | 0–3 are an integrity checksum; changing them can make the radio wipe its EEPROM. 4–5 identify the hardware version. |
+| Refuses a backup whose version bytes differ from the radio's | Stops a restore from another model or variant. |
+| A fresh backup of the radio is saved before anything is written | Every restore can be undone. |
+| Only bytes that differ are written; each is read back, with retries | Usually a few dozen writes instead of thousands; stops if writes stop verifying. |
+| The radio's current CAT baud rate (0x64 bits 7–6) is kept | Restoring a different rate would cut the link halfway through. |
+| Radio must be in receive with the dial LOCK off | The FT-817 can stop answering CAT while locked. |
+| A full read-back at the end | You see exactly which bytes, if any, don't match. |
+
+Restoring **calibration from another radio** onto yours would mis-calibrate it: each radio's values are its own. The app can't tell two FT-817s apart, so restore only your own radio's backups.
+
+**First real-radio test (recommended):** back up, change one harmless setting on the radio (for example beep volume), then restore and check that the setting comes back.
+
+Command line, same engine: `cargo run -p ft817-eeprom --example ee_cli -- backup <port> [baud] out.817ee` and `... restore <port> [baud] file.817ee --yes`.
+
 ## Install
 
 Download the installer for your system from the [Releases](../../releases) page:
@@ -57,10 +92,12 @@ Download the installer for your system from the [Releases](../../releases) page:
 | Linux x64 | `.deb`, `.rpm` or `.AppImage` |
 | Raspberry Pi 4/5 (64-bit Raspberry Pi OS) | `arm64` `.deb` |
 
+Each app has its own installer: `817.Monitor_…` and `817.EEPROM_…`.
+
 The builds are not code-signed yet, so you'll see a warning the first time:
 
 - **Windows:** SmartScreen → "More info" → "Run anyway".
-- **macOS:** right-click the app → Open → Open. If macOS reports the app as damaged, run `xattr -cr "/Applications/817 Monitor.app"`.
+- **macOS:** right-click the app → Open → Open. If macOS reports the app as damaged, run `xattr -cr "/Applications/817 Monitor.app"` (or `817 EEPROM.app`).
 - **Linux:** add yourself to the serial group to open the port without root: `sudo usermod -aG dialout $USER` (log out and back in).
 
 ## Build from source
@@ -70,10 +107,14 @@ Requirements: [Rust](https://rustup.rs) (stable), Node.js 18+, and on Linux:
 
 ```
 npm install
-npm run demo          # run with the simulated radio
-npm run dev           # run normally
-npm run build         # installers in src-tauri/target/release/bundle/
-npm test              # unit + end-to-end tests
+npm run demo          # 817 Monitor with the simulated radio
+npm run dev           # 817 Monitor
+npm run build         # installers in target/release/bundle/
+npm test              # all unit + end-to-end tests (cargo test --workspace)
+
+cd eeprom && npm install
+npm run dev           # 817 EEPROM (choose "Demo" to use the simulated radio)
+npm run build
 ```
 
 ### Testing without a radio
@@ -81,9 +122,10 @@ npm test              # unit + end-to-end tests
 ```
 # Linux/macOS: a virtual serial cable with a simulated FT-817 on one end
 socat -d -d pty,raw,echo=0,link=/tmp/radio pty,raw,echo=0,link=/tmp/app
-cargo run --manifest-path src-tauri/Cargo.toml --example sim_serial -- /tmp/radio
-# then select /tmp/app in the app, or watch the decoded state as JSON:
-cargo run --manifest-path src-tauri/Cargo.toml --example cli_monitor -- serial /tmp/app 38400
+cargo run -p ft817-monitor --example sim_serial -- /tmp/radio            # add --static for EEPROM tests
+# then select /tmp/app in either app, or from the command line:
+cargo run -p ft817-monitor --example cli_monitor -- serial /tmp/app 38400
+cargo run -p ft817-eeprom  --example ee_cli -- backup /tmp/app 38400 test.817ee
 ```
 
 On Windows, use a virtual COM-port pair such as com0com.
@@ -95,12 +137,12 @@ Either push a version tag (`git tag v0.1.0 && git push --tags`), or open the Act
 ## Project layout
 
 ```
-src-tauri/src/cat.rs        protocol: read-only frame builder and decoders (unit tested)
-src-tauri/src/poller.rs     polling loops for serial/demo and rigctld, reconnect logic
-src-tauri/src/transport.rs  serial port and simulator links
-src-tauri/src/sim.rs        simulated FT-817
-ui/                         the display (plain HTML/CSS/JS, no build step)
-docs/PROTOCOL.md            what is read, how it's decoded, and the open questions
+crates/ft817-cat/           shared, read-only: CAT frames and decoders, serial link, simulated FT-817 (with EEPROM)
+src-tauri/, ui/             817 Monitor (polling loops, rigctld, display)
+eeprom/src-tauri/src/engine.rs      817 EEPROM: backup, restore plan, guarded writes (the only write code)
+eeprom/src-tauri/src/backupfile.rs  the .817ee file format
+eeprom/ui/                  817 EEPROM window
+docs/PROTOCOL.md            what is read and written, how it's decoded, and the open questions
 ```
 
 ## Credits

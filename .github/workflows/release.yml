@@ -1,4 +1,4 @@
-# Builds installers for Windows, macOS (Apple Silicon + Intel), Linux x64 and
+# Builds installers for both apps (817 Monitor and 817 EEPROM) for Windows, macOS (Apple Silicon + Intel), Linux x64 and
 # Linux arm64 (Raspberry Pi 4/5, 64-bit OS) and attaches them to a draft
 # GitHub release. Trigger: push a tag like v0.1.0, or run it manually from the
 # Actions tab with a version (GitHub then creates the tag on the current commit).
@@ -51,21 +51,34 @@ jobs:
           targets: ${{ startsWith(matrix.platform, 'macos') && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
 
       - run: npm ci
+      - run: npm ci --prefix eeprom
 
       - name: Unit tests
-        run: cargo test --manifest-path src-tauri/Cargo.toml
+        run: cargo test --workspace
 
-      - uses: tauri-apps/tauri-action@v0
+      - name: Build 817 Monitor
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || inputs.version }}
-          releaseName: "817 Monitor ${{ github.ref_type == 'tag' && github.ref_name || inputs.version }}"
-          releaseBody: "See README for install notes. Builds are unsigned: Windows SmartScreen and macOS Gatekeeper will warn on first launch."
+          releaseName: "817 Monitor & 817 EEPROM ${{ github.ref_type == 'tag' && github.ref_name || inputs.version }}"
+          releaseBody: "Two apps: 817 Monitor (read-only CAT display) and 817 EEPROM (backup and restore). See the README for install notes. Builds are unsigned, so Windows SmartScreen and macOS Gatekeeper will warn on first launch."
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+      - name: Build 817 EEPROM
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || inputs.version }}
+          releaseName: "817 Monitor & 817 EEPROM ${{ github.ref_type == 'tag' && github.ref_name || inputs.version }}"
+          releaseBody: "Two apps: 817 Monitor (read-only CAT display) and 817 EEPROM (backup and restore). See the README for install notes. Builds are unsigned, so Windows SmartScreen and macOS Gatekeeper will warn on first launch."
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+          projectPath: eeprom

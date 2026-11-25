@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>817 EEPROM</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <div>
+      <h1>817 EEPROM</h1>
+      <p class="sub">Backup &amp; restore for the Yaesu FT-817 / FT-817ND / FT-818</p>
+    </div>
+    <div class="conn">
+      <select id="source" title="Radio connection"></select>
+      <select id="baud" title="Must match the radio's CAT RATE menu setting">
+        <option>4800</option><option>9600</option><option selected>38400</option>
+      </select>
+      <button class="btn small" id="refresh" type="button">Refresh</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2><span class="num">1</span> Back up</h2>
+      <p class="muted">Reads the radio's whole EEPROM twice and compares the two reads, so the saved copy is exactly what's in the radio: the 76 calibration values, menu settings, VFOs and memories. This only reads; nothing on the radio changes. Every backup is also kept in the backups folder.</p>
+      <div class="actions">
+        <button class="btn primary" id="backup-btn">Back up radio</button>
+        <button class="btn" id="save-as-btn" disabled>Save a copy…</button>
+      </div>
+      <div class="result hidden" id="backup-result"></div>
+      <details class="hidden" id="cal-wrap">
+        <summary>Calibration values (soft-cal menu 1–76) <button class="btn tiny" id="copy-cal" type="button">Copy as text</button></summary>
+        <div class="cal-grid" id="cal-grid"></div>
+        <p class="muted small">Tip: also keep a written copy. KA7OEI strongly recommends recording these 76 values before any EEPROM work.</p>
+      </details>
+    </section>
+
+    <section class="card">
+      <h2><span class="num">2</span> Restore</h2>
+      <p class="muted">Writes a backup back into the radio. Only bytes that differ are written, and each write is read back and checked. The radio's protected header (addresses 0x00–0x05) and its current CAT baud rate are never changed. A fresh backup of the radio is saved automatically before anything is written.</p>
+      <div class="actions">
+        <button class="btn" id="open-btn">Open backup…</button>
+        <button class="btn" id="compare-btn" disabled>Compare with radio</button>
+        <button class="linkbtn hidden" id="demo-change" type="button">Demo: change the simulated radio</button>
+      </div>
+      <div class="result hidden" id="loaded-result"></div>
+      <div class="result hidden" id="plan-result"></div>
+      <div class="confirm hidden" id="confirm-wrap">
+        <label class="check"><input type="checkbox" id="confirm" /> I understand this writes to my radio's EEPROM. The radio is in receive, LOCK is off, and I won't touch it until the restore finishes.</label>
+        <button class="btn danger" id="restore-btn" disabled>Restore</button>
+      </div>
+      <div class="result hidden" id="restore-result"></div>
+    </section>
+  </main>
+
+  <div class="progress hidden" id="progress">
+    <div class="ptext"><span id="pphase">Working…</span><span id="pcount"></span></div>
+    <div class="pbar"><i id="pfill"></i></div>
+    <button class="btn small" id="cancel-btn" type="button">Cancel</button>
+  </div>
+
+  <footer>
+    <span class="muted small">Backups folder: <code id="dir">…</code></span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

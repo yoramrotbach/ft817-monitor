@@ -1,4 +1,4 @@
-# FT-817/818 CAT: what 817 Monitor reads
+# FT-817/818 CAT: what the apps read and write
 
 All frames are 5 bytes: four parameter bytes, then the opcode. The link is 8N2 at 4800, 9600 or 38400 baud.
 
@@ -49,6 +49,22 @@ Hamlib's current code reads MOD and SWR from the same nibble, which can't be rig
 | `7A` | 0 HF · 1 6 m · 2 FM BC · 3 Air · 4 2 m · 5 UHF · 6 general coverage antenna (0 front, 1 rear) · 7 split | | K, H |
 
 **Antenna:** the band group is inferred from the frequency (below 50 MHz = HF, 50–56 = 6 m, 76–108 = FM BC, 108–137 = Air, 144–148 = 2 m, 420–470 = UHF, anything else = general coverage). Edge cases outside the amateur bands may not match the radio's band-stack logic.
+
+## EEPROM backup and restore (817 EEPROM only)
+
+817 EEPROM uses `BB` to read and `BC` to write. A `BC` frame is `addrHi addrLo data0 data1 BC`: it always writes **two** bytes (the address and the next one up) **[K]**. The radio normally answers with one acknowledgment byte, but Hamlib tolerates a missing one **[H]**, and so does this app: what counts is reading the pair back.
+
+| Fact | Source | How the app uses it |
+|---|---|---|
+| Valid addresses are 0x0000–0x1925; reading past the end returns a single `00` | K | The end is found automatically and confirmed by asking twice more, so other models' sizes work too |
+| 0x00–0x03 are an integrity checksum; changing them can wipe the EEPROM, calibration included | K | `write_frame()` refuses any address below 0x06 (unit tested); the simulator wipes itself if those bytes change |
+| 0x04–0x05 identify the hardware version | K | A restore is refused if they differ between backup and radio |
+| 0x07–0x52 = soft-cal menu items 1–76 (address = item + 6); VCC calibration at 0x53; items 75–76 are signed | K | Shown by name in the app; counted as "calibration" in the restore summary |
+| 0x64 bits 7–6 = CAT rate (00 = 4800, 01 = 9600, 10 = 38400) | K | Kept at the radio's current value during a restore |
+| No checksum on the serial link; the radio can miss commands while busy | K | Two-pass reads with re-reads; every write read back, up to 3 tries; full read-back at the end |
+| The FT-817 may stop answering CAT while the dial is LOCKed | K | Restore and backup refuse to start while LOCK is on |
+
+Region labels in the restore summary (calibration, settings, VFOs/home, memories) follow the FT-817 map and are approximate on the FT-818.
 
 ## FT-818 notes
 
