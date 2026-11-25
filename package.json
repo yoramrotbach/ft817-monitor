@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Desktop CAT monitor for the Yaesu FT-817/818",
   "scripts": {
+    "tauri": "tauri",
     "dev": "tauri dev",
     "build": "tauri build",
     "demo": "tauri dev -- -- --demo",
