@@ -1,5 +1,7 @@
 # FT-817 tools: 817 Monitor and 817 EEPROM
 
+> **⚠️ Experimental software, made for personal use.** Use it at your own risk. The author accepts no responsibility for any damage to your radio, including loss of calibration, settings or memories. See [Disclaimer](#disclaimer).
+
 Two free desktop apps for the **Yaesu FT-817, FT-817ND and FT-818**, for Windows, macOS and Linux (including Raspberry Pi):
 
 - **[817 Monitor](#817-monitor)**: a large LCD-style display of what the radio is doing. Strictly read-only.
@@ -8,6 +10,8 @@ Two free desktop apps for the **Yaesu FT-817, FT-817ND and FT-818**, for Windows
 They are separate apps on purpose: the monitor contains no code that can write to the radio.
 
 # 817 Monitor
+
+> Experimental software for personal use, provided without warranty. See [Disclaimer](#disclaimer).
 
 A desktop CAT monitor for the **Yaesu FT-817, FT-817ND and FT-818**. It shows what the radio is doing on a large, LCD-style panel: frequency, mode, S-meter, transmit meters and front-panel settings. The idea comes from hardware CAT displays for the 817, but this is an independent design for Windows, macOS and Linux (including Raspberry Pi).
 
@@ -56,6 +60,8 @@ Why it's optional: `0xBE`, one value away, is the factory reset, which erases th
 Published sources disagree on how the `0xBD` reply is packed. If SWR moves with your voice and ALC follows the antenna, switch "Reply layout" in Settings.
 
 # 817 EEPROM
+
+> **⚠️ Experimental software for personal use. 817 EEPROM writes to your radio's EEPROM.** A failed or incorrect restore can leave the radio mis-calibrated or unusable. You use it entirely at your own risk; the author accepts no responsibility for any damage. Keep your own backups and a written copy of your calibration values. See [Disclaimer](#disclaimer).
 
 ![Calibration values from a backup](docs/eeprom-calibration.png)
 
@@ -144,6 +150,15 @@ eeprom/src-tauri/src/backupfile.rs  the .817ee file format
 eeprom/ui/                  817 EEPROM window
 docs/PROTOCOL.md            what is read and written, how it's decoded, and the open questions
 ```
+
+## Disclaimer
+
+817 Monitor and 817 EEPROM are **experimental software, written for the author's personal use** and shared with the amateur radio community in the hope that they are useful. They are provided "as is", without warranty of any kind, as stated in the [MIT License](LICENSE).
+
+- **You use them entirely at your own risk.** The author accepts **no responsibility or liability for any damage** to your radio or other equipment, including loss of calibration, settings or memory channels, or a radio that needs repair or realignment, however it is caused.
+- Parts of the FT-817/818 CAT protocol used here are **undocumented by Yaesu** and come from community research. They may be wrong for your radio model, firmware or hardware variant, and they have not been verified on every model.
+- **817 EEPROM writes to the radio.** Before restoring anything, make sure you have a good backup and a written copy of the 76 soft-calibration values, and only restore backups taken from that same radio.
+- Neither app is affiliated with, endorsed by or supported by Yaesu.
 
 ## Credits
 
