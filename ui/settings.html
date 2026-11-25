@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>817 Monitor — Settings</title>
+  <link rel="stylesheet" href="settings.css" />
+</head>
+<body>
+  <main class="settings">
+
+
+    <fieldset>
+      <legend>Connection</legend>
+      <label class="radio"><input type="radio" name="kind" value="serial" checked /> Direct serial (full detail, uses the CAT port alone)</label>
+      <label class="radio"><input type="radio" name="kind" value="rigctld" /> Hamlib rigctld (share the radio with WSJT-X, loggers)</label>
+      <label class="radio"><input type="radio" name="kind" value="demo" /> Demo (simulated radio, no hardware)</label>
+    </fieldset>
+
+    <fieldset id="serial-opts">
+      <legend>Serial port</legend>
+      <div class="field">
+        <select id="port"></select>
+        <button class="btn small" id="refresh-ports" type="button">Refresh</button>
+      </div>
+      <div class="field">
+        <label for="baud">Baud rate</label>
+        <select id="baud">
+          <option>4800</option><option>9600</option><option selected>38400</option>
+        </select>
+      </div>
+      <p class="hint">Must match the radio's CAT RATE menu setting. Format is fixed at 8N2. RTS and DTR are set low right after the port opens, because some interfaces (Digirig and similar) key the transmitter on them.</p>
+    </fieldset>
+
+    <fieldset id="rigctld-opts" class="hidden">
+      <legend>rigctld</legend>
+      <div class="field">
+        <label for="host">Host</label><input id="host" value="127.0.0.1" />
+        <label for="tcp-port">Port</label><input id="tcp-port" type="number" value="4532" />
+      </div>
+      <p class="hint">Example: <code>rigctld -m 1020 -r COM3 -s 38400</code> (FT-817; use <code>-m 1041</code> for the FT-818). Panel flags such as AGC and NB aren't available this way.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Transmit meters</legend>
+      <label class="check"><input type="checkbox" id="read-bd" /> Read SWR, ALC and MOD while transmitting</label>
+      <p class="hint warn">Uses the undocumented command 0xBD. Its neighbor 0xBE is the factory reset, which erases calibration. This app only ever sends read commands, but leave this off if your cable is unreliable. Power output works either way.</p>
+      <div class="field">
+        <label for="meter-map">Reply layout</label>
+        <select id="meter-map">
+          <option value="ka7oei">KA7OEI (PWR|SWR, MOD|ALC)</option>
+          <option value="alternate">Alternate (PWR|ALC, SWR|MOD)</option>
+        </select>
+      </div>
+      <p class="hint">Published sources disagree on this layout. If SWR moves when you talk and ALC tracks the antenna, switch it.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Display</legend>
+      <div class="field">
+        <label for="theme">LCD color</label>
+        <select id="theme">
+          <option value="radio">Follow the radio</option>
+          <option value="amber">Amber</option>
+          <option value="blue">Blue</option>
+          <option value="night">Night (dark)</option>
+        </select>
+      </div>
+      <label class="check"><input type="checkbox" id="on-top" /> Keep window on top</label>
+    </fieldset>
+  </main>
+  <footer class="bar">
+    <span class="hint" id="apply-hint">Connection changes apply when you click Done.</span>
+    <button class="btn" id="done" type="button">Done</button>
+  </footer>
+  <script src="settings.js"></script>
+</body>
+</html>

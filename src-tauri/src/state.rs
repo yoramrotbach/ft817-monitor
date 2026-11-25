@@ -16,7 +16,15 @@ pub enum Link {
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct RigState {
     pub link: Link,
+    /// Short status: "Connecting (attempt 2)…", "Next attempt in 4 s", "Connected".
     pub message: String,
+    /// The last connection problem. Stays set through retries (so the user can
+    /// read it) and is cleared only once the link is up again.
+    pub error: Option<String>,
+    /// Connection attempt number since the link was last up (0 while up).
+    pub attempt: u32,
+    /// Seconds until the next connection attempt while waiting to retry.
+    pub retry_in: Option<u32>,
     pub source: String, // "Serial COM3 @ 38400", "rigctld 127.0.0.1:4532", "Demo"
     pub polls_per_sec: f32,
     pub errors: u32,

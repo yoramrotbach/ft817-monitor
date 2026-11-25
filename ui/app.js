@@ -89,7 +89,7 @@
     // status bar
     const dot = $("dot");
     dot.className = "dot " + s.link;
-    $("link-text").textContent = { up: "Connected", connecting: "Connecting…", lost: "No link", stopped: "Stopped" }[s.link];
+    $("link-text").textContent = s.link === "lost" && s.retry_in ? `No link · retrying in ${s.retry_in} s` : { up: "Connected", connecting: "Connecting…", lost: "No link", stopped: "Stopped" }[s.link];
     $("source").textContent = s.source || "Not connected";
     $("rate").textContent = s.link === "up" ? `${Math.round(s.polls_per_sec)} polls/s` : "";
     running = s.link !== "stopped";
@@ -100,8 +100,17 @@
     const down = s.link !== "up";
     $("lcd").classList.toggle("dim", down);
     $("nolink").classList.toggle("hidden", !down);
-    $("nolink-title").textContent = { connecting: "CONNECTING", lost: "NO LINK", stopped: "STANDBY" }[s.link] || "";
-    $("nolink-msg").textContent = s.link === "stopped" ? "Press Connect, or open Settings (⚙) to choose the port." : s.message;
+    // While retrying after an error, keep saying NO LINK instead of flashing CONNECTING.
+    $("nolink-title").textContent = s.link === "connecting" && s.error ? "NO LINK" : ({ connecting: "CONNECTING", lost: "NO LINK", stopped: "STANDBY" }[s.link] || "");
+    // The error stays on screen through retries; attempts and the countdown
+    // to the next one are shown on their own line underneath.
+    if (s.link === "stopped") {
+      $("nolink-msg").textContent = "Press Connect, or open Settings (⚙) to choose the port.";
+      $("nolink-status").textContent = "";
+    } else {
+      $("nolink-msg").textContent = s.error || "";
+      $("nolink-status").textContent = s.message || "";
+    }
     if (down) return;
 
     if (s.lcd_color && s.lcd_color !== radioColor) { radioColor = s.lcd_color; applyTheme(); }
@@ -164,76 +173,27 @@
   }
   $("connect-btn").addEventListener("click", () => (running ? disconnect() : connect()));
 
-  // ------------------------------------------------------------ settings panel
-  async function refreshPorts() {
-    const sel = $("port");
-    let ports = [];
-    try { ports = await invoke("list_ports"); } catch (_) {}
-    sel.innerHTML = "";
-    if (!ports.length) {
-      const o = document.createElement("option");
-      o.value = ""; o.textContent = "No serial ports found";
-      sel.appendChild(o);
-    }
-    for (const p of ports) {
-      const o = document.createElement("option");
-      o.value = p.name;
-      o.textContent = p.description ? `${p.name} — ${p.description}` : p.name;
-      sel.appendChild(o);
-    }
-    if (cfg.port && !ports.some((p) => p.name === cfg.port)) {
-      const o = document.createElement("option");
-      o.value = cfg.port; o.textContent = `${cfg.port} (not present)`;
-      sel.appendChild(o);
-    }
-    sel.value = cfg.port || (ports[0]?.name ?? "");
-    cfg.port = sel.value;
-  }
-
-  function syncForm() {
-    document.querySelectorAll('input[name="kind"]').forEach((r) => (r.checked = r.value === cfg.kind));
-    $("serial-opts").classList.toggle("hidden", cfg.kind !== "serial");
-    $("rigctld-opts").classList.toggle("hidden", cfg.kind !== "rigctld");
-    $("baud").value = cfg.baud;
-    $("host").value = cfg.host;
-    $("tcp-port").value = cfg.tcpPort;
-    $("read-bd").checked = cfg.readBd;
-    $("meter-map").value = cfg.meterMap;
-    $("theme").value = cfg.theme;
-    $("on-top").checked = cfg.onTop;
-  }
-
-  let dirty = false;
-  function openSettings() { syncForm(); refreshPorts(); dirty = false; $("settings").classList.remove("hidden"); }
-  async function closeSettings() {
-    $("settings").classList.add("hidden");
-    save();
-    if (dirty && running) await connect(); // apply connection changes live
-  }
+  // ------------------------------------------------------------ settings window
+  // The settings live here; the separate Settings window asks for them,
+  // edits them and sends each change back.
+  const openSettings = () => invoke("open_settings").catch(() => {});
   $("settings-btn").addEventListener("click", openSettings);
-  $("close-settings").addEventListener("click", closeSettings);
-  $("refresh-ports").addEventListener("click", refreshPorts);
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSettings(); });
-
-  const bind = (id, key, ev = "change", conv = (v) => v, connectionSetting = true) =>
-    $(id).addEventListener(ev, (e) => {
-      const el = e.target;
-      cfg[key] = conv(el.type === "checkbox" ? el.checked : el.value);
-      if (connectionSetting) dirty = true;
-      save();
-    });
-  document.querySelectorAll('input[name="kind"]').forEach((r) =>
-    r.addEventListener("change", () => { cfg.kind = r.value; dirty = true; syncForm(); save(); }));
-  bind("port", "port");
-  bind("baud", "baud");
-  bind("host", "host", "input");
-  bind("tcp-port", "tcpPort", "input", Number);
-  bind("read-bd", "readBd");
-  bind("meter-map", "meterMap");
-  $("theme").addEventListener("change", (e) => { cfg.theme = e.target.value; save(); applyTheme(); });
-  $("on-top").addEventListener("change", async (e) => {
-    cfg.onTop = e.target.checked; save();
-    if (TAURI) { try { await TAURI.window.getCurrentWindow().setAlwaysOnTop(cfg.onTop); } catch (_) {} }
+  let pendingReconnect = false;
+  listen("settings-request", () => {
+    if (TAURI) TAURI.event.emit("settings-config", cfg);
+  });
+  listen("settings-changed", (e) => {
+    const { cfg: next, connection } = e.payload;
+    const onTopChanged = next.onTop !== cfg.onTop;
+    cfg = { ...cfg, ...next, autoConnect: cfg.autoConnect };
+    save();
+    applyTheme();
+    if (onTopChanged && TAURI) TAURI.window.getCurrentWindow().setAlwaysOnTop(!!cfg.onTop).catch(() => {});
+    if (connection) pendingReconnect = true;
+  });
+  listen("settings-closed", async () => {
+    if (pendingReconnect && running) await connect(); // restart with the new connection settings
+    pendingReconnect = false;
   });
 
   // ------------------------------------------------------------ start
@@ -247,6 +207,7 @@
   // ------------------------------------------------------------ browser mock
   function mockListen(_name, cb) { mockListen.cb = cb; return Promise.resolve(() => {}); }
   async function mockInvoke(cmd) {
+    if (cmd === "open_settings") return;
     if (cmd === "list_ports") return [{ name: "/dev/ttyUSB0", description: "FTDI FT232R USB UART" }];
     if (cmd === "stop_monitor") { clearInterval(mockInvoke.t); mockListen.cb?.({ payload: { link: "stopped" } }); return; }
     if (cmd === "start_monitor") {

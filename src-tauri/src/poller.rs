@@ -64,6 +64,41 @@ fn sleep_unless_stopped(stop: &AtomicBool, d: Duration) {
     }
 }
 
+/// Seconds between connection attempts. Long enough to read the error.
+const RETRY_SECS: u32 = 5;
+
+fn begin_attempt(st: &mut RigState, what: &str, emit: &impl Fn(&RigState)) {
+    st.attempt += 1;
+    st.retry_in = None;
+    st.link = Link::Connecting;
+    st.message = if st.attempt > 1 { format!("{what} (attempt {})…", st.attempt) } else { format!("{what}…") };
+    emit(st);
+}
+
+fn link_up(st: &mut RigState, msg: &str) {
+    st.link = Link::Up;
+    st.message = msg.into();
+    st.error = None;
+    st.attempt = 0;
+    st.retry_in = None;
+}
+
+/// Show the error, then count down to the next attempt, one update per second.
+fn fail_and_wait(st: &mut RigState, error: String, stop: &AtomicBool, emit: &impl Fn(&RigState)) {
+    st.link = Link::Lost;
+    st.error = Some(error);
+    for left in (1..=RETRY_SECS).rev() {
+        if stop.load(Ordering::Relaxed) {
+            break;
+        }
+        st.retry_in = Some(left);
+        st.message = format!("Next attempt in {left} s");
+        emit(st);
+        sleep_unless_stopped(stop, Duration::from_secs(1));
+    }
+    st.retry_in = None;
+}
+
 pub fn run(cfg: MonitorConfig, stop: Arc<AtomicBool>, emit: impl Fn(&RigState)) {
     match cfg.source.clone() {
         Source::Rigctld { host, port } => run_rigctld(&host, port, &stop, &emit),
@@ -178,19 +213,15 @@ fn run_cat(
 ) {
     let mut st = RigState { source: label.to_string(), ..Default::default() };
     while !stop.load(Ordering::Relaxed) {
-        st.link = Link::Connecting;
-        st.message = "Connecting…".into();
-        emit(&st);
+        begin_attempt(&mut st, "Connecting", emit);
         let mut port = match open() {
             Ok(p) => p,
             Err(e) => {
-                st.link = Link::Lost;
-                st.message = format!("Cannot open port: {e}");
-                emit(&st);
-                sleep_unless_stopped(stop, Duration::from_secs(2));
+                fail_and_wait(&mut st, format!("Cannot open the serial port: {e}. Check that the cable is plugged in and no other program is using the port."), stop, emit);
                 continue;
             }
         };
+        let mut lost: Option<String> = None;
 
         let mut slow = Slow { dig: None, ant_split: None };
         let mut last_slow = Instant::now() - SLOW_EVERY;
@@ -210,8 +241,7 @@ fn run_cat(
                 Ok(()) => {
                     fails = 0;
                     if st.link != Link::Up {
-                        st.link = Link::Up;
-                        st.message = "Connected".into();
+                        link_up(&mut st, "Connected");
                         last_emit = Instant::now() - EMIT_EVERY;
                     }
                     st.polls_per_sec = rate.tick();
@@ -220,11 +250,9 @@ fn run_cat(
                     fails += 1;
                     st.errors += 1;
                     if fails >= 3 {
-                        st.link = Link::Lost;
-                        st.message = format!(
+                        lost = Some(format!(
                             "No reply from the radio ({e}). Check the cable, that the radio is on, and that the baud rate matches the radio's CAT RATE menu setting."
-                        );
-                        emit(&st);
+                        ));
                         break; // reopen the port
                     }
                 }
@@ -238,8 +266,8 @@ fn run_cat(
             }
         }
         drop(port);
-        if st.link == Link::Lost {
-            sleep_unless_stopped(stop, Duration::from_secs(1));
+        if let Some(err) = lost {
+            fail_and_wait(&mut st, err, stop, emit);
         }
     }
 }
@@ -311,16 +339,11 @@ fn swr_to_scale(swr: f64) -> u8 {
 fn run_rigctld(host: &str, port: u16, stop: &AtomicBool, emit: &impl Fn(&RigState)) {
     let mut st = RigState { source: format!("rigctld {host}:{port}"), ..Default::default() };
     while !stop.load(Ordering::Relaxed) {
-        st.link = Link::Connecting;
-        st.message = "Connecting to rigctld…".into();
-        emit(&st);
+        begin_attempt(&mut st, "Connecting to rigctld", emit);
         let mut rc = match Rigctld::connect(host, port) {
             Ok(r) => r,
             Err(e) => {
-                st.link = Link::Lost;
-                st.message = format!("Cannot reach rigctld: {e}. Start it with: rigctld -m 1020 -r <port> -s 38400 (FT-817; use 1041 for FT-818)");
-                emit(&st);
-                sleep_unless_stopped(stop, Duration::from_secs(2));
+                fail_and_wait(&mut st, format!("Cannot reach rigctld: {e}. Start it with: rigctld -m 1020 -r <port> -s 38400 (FT-817; use 1041 for FT-818)"), stop, emit);
                 continue;
             }
         };
@@ -367,8 +390,7 @@ fn run_rigctld(host: &str, port: u16, stop: &AtomicBool, emit: &impl Fn(&RigStat
                     last_slow = Instant::now();
                 }
                 if st.link != Link::Up {
-                    st.link = Link::Up;
-                    st.message = "Connected (shared via rigctld)".into();
+                    link_up(&mut st, "Connected (shared via rigctld)");
                 }
                 st.polls_per_sec = rate.tick();
                 emit(&st);
@@ -379,11 +401,8 @@ fn run_rigctld(host: &str, port: u16, stop: &AtomicBool, emit: &impl Fn(&RigStat
         })();
 
         if let Err(e) = result {
-            st.link = Link::Lost;
             st.errors += 1;
-            st.message = format!("rigctld connection lost: {e}");
-            emit(&st);
-            sleep_unless_stopped(stop, Duration::from_secs(2));
+            fail_and_wait(&mut st, format!("rigctld connection lost: {e}"), stop, emit);
         }
     }
 }
@@ -418,5 +437,31 @@ mod tests {
         assert_eq!(up.lcd_color.as_deref(), Some("amber"));
         assert!(up.polls_per_sec > 10.0 && up.polls_per_sec < 45.0, "rate {}", up.polls_per_sec);
         assert_eq!(v.last().unwrap().link, Link::Stopped);
+    }
+
+    #[test]
+    fn connection_error_stays_visible_through_retries() {
+        let stop = Arc::new(AtomicBool::new(false));
+        let seen: Arc<Mutex<Vec<RigState>>> = Arc::default();
+        let (s2, seen2) = (stop.clone(), seen.clone());
+        let h = std::thread::spawn(move || {
+            let cfg = MonitorConfig {
+                source: Source::Serial { port: "/nonexistent/port".into(), baud: 38400 },
+                read_tx_meters: false,
+                meter_map: MeterMap::Ka7oei,
+            };
+            run(cfg, s2, |st| seen2.lock().unwrap().push(st.clone()));
+        });
+        std::thread::sleep(Duration::from_millis(5600)); // first wait + second attempt
+        stop.store(true, Ordering::Relaxed);
+        h.join().unwrap();
+        let v = seen.lock().unwrap();
+        // Countdown 5..1 after the first failure, one update per second.
+        let countdown: Vec<u32> = v.iter().filter_map(|s| s.retry_in).take(5).collect();
+        assert_eq!(countdown, vec![5, 4, 3, 2, 1]);
+        // During the second attempt the earlier error is still shown.
+        let second = v.iter().find(|s| s.attempt == 2 && s.link == Link::Connecting).expect("second attempt");
+        assert!(second.error.as_deref().unwrap_or("").contains("Cannot open the serial port"));
+        assert!(second.message.contains("attempt 2"));
     }
 }
