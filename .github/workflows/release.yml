@@ -1,12 +1,17 @@
 # Builds installers for Windows, macOS (Apple Silicon + Intel), Linux x64 and
 # Linux arm64 (Raspberry Pi 4/5, 64-bit OS) and attaches them to a draft
-# GitHub release. Trigger: push a tag like v0.1.0, or run it manually.
+# GitHub release. Trigger: push a tag like v0.1.0, or run it manually from the
+# Actions tab with a version (GitHub then creates the tag on the current commit).
 name: release
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag to create, e.g. v0.1.0"
+        required: true
 
 permissions:
   contents: write
@@ -58,8 +63,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('build-{0}', github.run_number) }}
-          releaseName: "817 Monitor ${{ github.ref_type == 'tag' && github.ref_name || format('build {0}', github.run_number) }}"
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || inputs.version }}
+          releaseName: "817 Monitor ${{ github.ref_type == 'tag' && github.ref_name || inputs.version }}"
           releaseBody: "See README for install notes. Builds are unsigned: Windows SmartScreen and macOS Gatekeeper will warn on first launch."
           releaseDraft: true
           prerelease: false

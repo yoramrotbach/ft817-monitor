@@ -90,7 +90,7 @@ On Windows, use a virtual COM-port pair such as com0com.
 
 ### Releasing
 
-Push a version tag (`git tag v0.1.0 && git push --tags`). GitHub Actions builds every platform and creates a draft release with the installers attached.
+Either push a version tag (`git tag v0.1.0 && git push --tags`), or open the Actions tab → release → "Run workflow" and enter a version such as `v0.1.1`. GitHub Actions builds every platform and creates a draft release with the installers attached.
 
 ## Project layout
 
