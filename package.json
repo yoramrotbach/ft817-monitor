@@ -1,0 +1,16 @@
+{
+  "name": "ft817-monitor",
+  "version": "0.1.0",
+  "description": "Desktop CAT monitor for the Yaesu FT-817/818",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "demo": "tauri dev -- -- --demo",
+    "test": "cd src-tauri && cargo test"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.6"
+  },
+  "private": true
+}

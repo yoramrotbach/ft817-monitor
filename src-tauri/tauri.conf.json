@@ -1,0 +1,40 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "817 Monitor",
+  "version": "0.1.0",
+  "identifier": "net.4z1yr.ft817monitor",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "817 Monitor",
+        "width": 720,
+        "height": 380,
+        "minWidth": 560,
+        "minHeight": 320,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Utility",
+    "shortDescription": "CAT monitor for the Yaesu FT-817/818",
+    "longDescription": "Read-only desktop monitor that shows what a Yaesu FT-817, FT-817ND or FT-818 is doing over its CAT port: frequency, mode, meters and panel settings.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}
