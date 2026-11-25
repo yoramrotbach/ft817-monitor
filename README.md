@@ -101,7 +101,8 @@ Each app has its own installer: `817.Monitor_…` and `817.EEPROM_…`.
 The builds are not code-signed yet, so you'll see a warning the first time:
 
 - **Windows:** SmartScreen → "More info" → "Run anyway".
-- **macOS:** right-click the app → Open → Open. If macOS reports the app as damaged, run `xattr -cr "/Applications/817 Monitor.app"` (or `817 EEPROM.app`).
+- **macOS:** the first time, macOS says it can't verify the developer. Open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to the app's name. If macOS instead says the app is **damaged**, run this in Terminal once (use `817 EEPROM.app` for the other app):
+  `xattr -cr "/Applications/817 Monitor.app"`
 - **Linux:** add yourself to the serial group to open the port without root: `sudo usermod -aG dialout $USER` (log out and back in).
 
 ## Source code

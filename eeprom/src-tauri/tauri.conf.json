@@ -11,7 +11,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "817 EEPROM — backup & restore",
+        "title": "817 EEPROM \u2014 backup & restore",
         "width": 760,
         "height": 720,
         "minWidth": 600,
@@ -35,6 +35,9 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "macOS": {
+      "signingIdentity": "-"
+    }
   }
 }
