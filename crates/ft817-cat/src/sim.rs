@@ -225,8 +225,8 @@ impl SimRadio {
             }
             cat::OP_READ_TX_METER => {
                 if s.ptt {
-                    // KA7OEI layout: PWR|SWR, MOD|ALC
-                    vec![(s.pwr << 4) | s.swr, (s.modulation << 4) | s.alc]
+                    // Layout seen on a real FT-817ND: PWR|SWR, ALC|MOD
+                    vec![(s.pwr << 4) | s.swr, (s.alc << 4) | s.modulation]
                 } else {
                     vec![0x00]
                 }

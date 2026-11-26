@@ -245,12 +245,17 @@ pub fn decode_tx_status(b: u8) -> TxStatus {
 // ---------------------------------------------------------------- TX meters
 
 /// Published sources disagree on how the undocumented BD reply packs its
-/// four nibbles, so the layout is a user setting. Both agree on PWR.
+/// four nibbles, so the layout is a user setting. All agree on PWR.
+/// `Tested` comes from a real FT-817ND (Nov 2026): byte 0 low nibble rose
+/// with no antenna connected (SWR); byte 1 low followed the voice (MOD);
+/// byte 1 high stayed at zero at normal drive (ALC).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum MeterMap {
-    /// KA7OEI: byte0 = PWR|SWR, byte1 = MOD|ALC
+    /// Field-tested on an FT-817ND: byte0 = PWR|SWR, byte1 = ALC|MOD
     #[default]
+    Tested,
+    /// KA7OEI: byte0 = PWR|SWR, byte1 = MOD|ALC
     Ka7oei,
     /// Hamlib-style: byte0 = PWR|ALC, byte1 = SWR|MOD
     Alternate,
@@ -271,6 +276,7 @@ pub fn decode_tx_meter(b: &[u8], map: MeterMap) -> Option<TxMeter> {
     }
     let (b0, b1) = (b[0], b[1]);
     Some(match map {
+        MeterMap::Tested => TxMeter { pwr: b0 >> 4, swr: b0 & 0x0F, alc: b1 >> 4, modulation: b1 & 0x0F },
         MeterMap::Ka7oei => TxMeter { pwr: b0 >> 4, swr: b0 & 0x0F, modulation: b1 >> 4, alc: b1 & 0x0F },
         MeterMap::Alternate => TxMeter { pwr: b0 >> 4, alc: b0 & 0x0F, swr: b1 >> 4, modulation: b1 & 0x0F },
     })
@@ -466,6 +472,9 @@ mod tests {
         assert_eq!(decode_tx_meter(&[0x00], MeterMap::Ka7oei), None);
         let m = decode_tx_meter(&[0xA2, 0x53], MeterMap::Ka7oei).unwrap();
         assert_eq!((m.pwr, m.swr, m.modulation, m.alc), (10, 2, 5, 3));
+        let m = decode_tx_meter(&[0xA2, 0x53], MeterMap::Tested).unwrap();
+        assert_eq!((m.pwr, m.swr, m.alc, m.modulation), (10, 2, 5, 3));
+        assert_eq!(MeterMap::default(), MeterMap::Tested);
         let m = decode_tx_meter(&[0xA2, 0x53], MeterMap::Alternate).unwrap();
         assert_eq!((m.pwr, m.alc, m.swr, m.modulation), (10, 2, 5, 3));
     }

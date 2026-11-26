@@ -81,7 +81,7 @@ pub fn run() {
                 let cfg = poller::MonitorConfig {
                     source: poller::Source::Demo,
                     read_tx_meters: true,
-                    meter_map: cat::MeterMap::Ka7oei,
+                    meter_map: cat::MeterMap::Tested,
                 };
                 tauri::async_runtime::spawn(async move {
                     // Give the page a moment to subscribe to events.

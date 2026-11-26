@@ -23,7 +23,7 @@ fn main() {
         },
         _ => Source::Demo,
     };
-    let cfg = MonitorConfig { source, read_tx_meters: a.iter().any(|x| x == "--bd"), meter_map: MeterMap::Ka7oei };
+    let cfg = MonitorConfig { source, read_tx_meters: a.iter().any(|x| x == "--bd"), meter_map: MeterMap::Tested };
     run(cfg, Arc::new(AtomicBool::new(false)), |st| {
         println!("{}", serde_json::to_string(st).unwrap());
     });

@@ -331,11 +331,6 @@ fn to_scale(v: f64) -> u8 {
     (v.clamp(0.0, 1.0) * 15.0).round() as u8
 }
 
-fn swr_to_scale(swr: f64) -> u8 {
-    // 1.0 -> 0, 3.0 or worse -> 15
-    (((swr - 1.0) / 2.0).clamp(0.0, 1.0) * 15.0).round() as u8
-}
-
 fn run_rigctld(host: &str, port: u16, stop: &AtomicBool, emit: &impl Fn(&RigState)) {
     let mut st = RigState { source: format!("rigctld {host}:{port}"), ..Default::default() };
     while !stop.load(Ordering::Relaxed) {
@@ -363,8 +358,10 @@ fn run_rigctld(host: &str, port: u16, stop: &AtomicBool, emit: &impl Fn(&RigStat
                 st.tx = rc.num("t")?.map(|v| v != 0.0).unwrap_or(false);
                 if st.tx {
                     st.po = rc.num("l RFPOWER_METER")?.map(to_scale);
-                    st.swr = rc.num("l SWR")?.map(swr_to_scale);
-                    st.alc = rc.num("l ALC")?.map(to_scale);
+                    // Hamlib's FT-817 backend decodes SWR and ALC from the wrong
+                    // nibbles (checked on a real FT-817ND), so they're not shown.
+                    st.swr = None;
+                    st.alc = None;
                     st.modulation = None;
                 } else {
                     if let Some(raw) = rc.num("l RAWSTR")? {
@@ -420,7 +417,7 @@ mod tests {
         let seen: Arc<Mutex<Vec<RigState>>> = Arc::default();
         let (s2, seen2) = (stop.clone(), seen.clone());
         let h = std::thread::spawn(move || {
-            let cfg = MonitorConfig { source: Source::Demo, read_tx_meters: true, meter_map: MeterMap::Ka7oei };
+            let cfg = MonitorConfig { source: Source::Demo, read_tx_meters: true, meter_map: MeterMap::Tested };
             run(cfg, s2, |st| seen2.lock().unwrap().push(st.clone()));
         });
         std::thread::sleep(Duration::from_millis(1500));
@@ -449,7 +446,7 @@ mod tests {
             let cfg = MonitorConfig {
                 source: Source::Serial { port: "/nonexistent/port".into(), baud: 38400 },
                 read_tx_meters: false,
-                meter_map: MeterMap::Ka7oei,
+                meter_map: MeterMap::Tested,
             };
             run(cfg, s2, |st| seen2.lock().unwrap().push(st.clone()));
         });

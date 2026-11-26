@@ -31,10 +31,11 @@ Sources:
 
 | Layout | byte 0 low | byte 1 high | byte 1 low |
 |---|---|---|---|
-| KA7OEI (default) | SWR | MOD | ALC |
-| Alternate (Hamlib-style) | ALC | SWR | MOD |
+| **Tested on FT-817ND (default)** | SWR | ALC | MOD |
+| KA7OEI | SWR | MOD | ALC |
+| Hamlib | ALC | SWR | MOD |
 
-Hamlib's current code reads MOD and SWR from the same nibble, which can't be right for both, so the alternate layout uses the remaining nibble for MOD. **Open question:** confirm on a real FT-817ND and FT-818 by transmitting into a dummy load (SWR low and steady, ALC and MOD following the voice).
+Field test on a real FT-817ND (Nov 2026): with the antenna disconnected, byte 0 low rose sharply, so it is SWR (as KA7OEI says). In SSB, byte 1 low followed the voice (MOD), and byte 1 high stayed at zero at normal mic gain (ALC, which only rises when the transmitter is driven hard). Note that the FT-817 "SWR" reading is closer to reflected power, so it also moves with the voice in SSB. Hamlib's code reads MOD and SWR from the same nibble and reads ALC from the nibble that is actually SWR, so TX meters through rigctld are unreliable. Not tested: the FT-818.
 
 **`BB` EEPROM** (address in bytes 0–1). The app uses only the first returned byte, as Hamlib does.
 

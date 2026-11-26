@@ -10,10 +10,12 @@
   // ------------------------------------------------------------ settings
   const DEFAULTS = {
     kind: "serial", port: "", baud: "38400", host: "127.0.0.1", tcpPort: 4532,
-    readBd: false, meterMap: "ka7oei", theme: "radio", onTop: false, autoConnect: false,
+    readBd: false, meterMap: "tested", theme: "radio", onTop: false, autoConnect: false,
   };
   let cfg = { ...DEFAULTS };
   try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem("ft817mon") || "{}") }; } catch (_) {}
+  // v2: the field-tested meter layout became the default (Nov 2026).
+  if (cfg.meterMapV !== 2) { cfg.meterMap = "tested"; cfg.meterMapV = 2; }
   const save = () => { try { localStorage.setItem("ft817mon", JSON.stringify(cfg)); } catch (_) {} };
 
   // ------------------------------------------------------------ meters

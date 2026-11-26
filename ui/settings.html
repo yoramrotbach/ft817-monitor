@@ -48,11 +48,12 @@
       <div class="field">
         <label for="meter-map">Reply layout</label>
         <select id="meter-map">
+          <option value="tested">Tested on FT-817ND (PWR|SWR, ALC|MOD)</option>
           <option value="ka7oei">KA7OEI (PWR|SWR, MOD|ALC)</option>
-          <option value="alternate">Alternate (PWR|ALC, SWR|MOD)</option>
+          <option value="alternate">Hamlib (PWR|ALC, SWR|MOD)</option>
         </select>
       </div>
-      <p class="hint">Published sources disagree on this layout. If SWR moves when you talk and ALC tracks the antenna, switch it.</p>
+      <p class="hint">Published sources disagree on this layout. The default was checked on a real FT-817ND; the others are kept for other radios.</p>
     </fieldset>
 
     <fieldset>
