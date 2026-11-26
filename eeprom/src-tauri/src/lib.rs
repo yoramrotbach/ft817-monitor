@@ -194,6 +194,8 @@ struct PlanInfo {
     cat_rate_kept: bool,
     pre_restore_backup: String,
     changes: Vec<engine::Write>,
+    cal_differences: Vec<engine::CalDiff>,
+    likely_other_radio: bool,
 }
 
 #[tauri::command]
@@ -216,6 +218,8 @@ async fn prepare_restore(app: AppHandle, source: Source) -> Result<PlanInfo, Str
             cat_rate_kept: plan.cat_rate_kept,
             pre_restore_backup: path.display().to_string(),
             changes: plan.writes.iter().take(200).cloned().collect(),
+            cal_differences: plan.cal_differences.clone(),
+            likely_other_radio: plan.likely_other_radio,
         };
         *state.pending.lock().unwrap() = Some(Pending { plan, current, made: Instant::now() });
         Ok(out)
@@ -225,7 +229,7 @@ async fn prepare_restore(app: AppHandle, source: Source) -> Result<PlanInfo, Str
 }
 
 #[tauri::command]
-async fn run_restore(app: AppHandle, source: Source) -> Result<RestoreReport, String> {
+async fn run_restore(app: AppHandle, source: Source, other_radio_ack: bool) -> Result<RestoreReport, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
         let _g = claim(&state)?;
@@ -234,7 +238,7 @@ async fn run_restore(app: AppHandle, source: Source) -> Result<RestoreReport, St
         if pending.made.elapsed() > Duration::from_secs(600) {
             return Err("The comparison is more than 10 minutes old. Compare with the radio again so the restore uses its current contents.".into());
         }
-        with_radio(&app, &state, &source, |ctx| engine::restore(ctx, &pending.plan, &pending.current, &backup))
+        with_radio(&app, &state, &source, |ctx| engine::restore(ctx, &pending.plan, &pending.current, &backup, other_radio_ack))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -243,8 +247,17 @@ async fn run_restore(app: AppHandle, source: Source) -> Result<RestoreReport, St
 /// Demo only: change some calibration, settings and memory bytes on the
 /// simulated radio so a restore has something to fix.
 #[tauri::command]
-fn demo_change_radio(state: State<'_, AppState>) -> usize {
+fn demo_change_radio(state: State<'_, AppState>, other_radio: bool) -> usize {
     let mut r = state.demo_radio.lock().unwrap();
+    if other_radio {
+        // Give the simulated radio a different unit's calibration.
+        let mut n = 0;
+        for item in engine::CAL_ITEMS.step_by(2) {
+            r.ee[item + 6] = r.ee[item + 6].wrapping_add(7);
+            n += 1;
+        }
+        return n;
+    }
     let addrs = [0x0C, 0x21, 0x57, 0x5C, 0x79, 0x150, 0x600, 0x601, 0x1200];
     for &a in &addrs {
         r.ee[a] ^= 0x2D;

@@ -9,6 +9,8 @@ Two free desktop apps for the **Yaesu FT-817, FT-817ND and FT-818**, for Windows
 
 They are separate apps on purpose: the monitor contains no code that can write to the radio.
 
+> **Tested radios.** Both apps have been tested on real hardware with two **FT-817ND** radios only. They have **not** been tested on the original **FT-817** or on the **FT-818ND**. Support for those models is based on published documentation, not on testing. If you own one, please test with care and report what you find.
+
 # 817 Monitor
 
 > Experimental software for personal use, provided without warranty. See [Disclaimer](#disclaimer).
@@ -67,7 +69,7 @@ Published sources disagree on how the `0xBD` reply is packed. If SWR moves with 
 
 The FT-817's EEPROM holds everything the radio knows about itself, including the **76 soft-calibration values** set at the factory. If those are lost (a factory reset, a bad write, a failing EEPROM), the radio is out of calibration, and redoing the alignment is hard without the original numbers. 817 EEPROM keeps a verified copy and can put it back.
 
-**Back up.** Reads the whole EEPROM (6,438 bytes on the FT-817; the end is detected automatically) twice and reconciles any difference by re-reading, so a cable glitch can't give you a silently bad backup. Each backup is saved automatically in the app's backups folder as a `.817ee` file: JSON with a readable hex dump and a SHA-256 checksum. The calibration values are shown by menu name and can be copied as text, so it's easy to keep a written copy as well.
+**Back up.** Reads the whole EEPROM (6,438 bytes, addresses 0x0000–0x1925) twice and reconciles any difference by re-reading, so a cable glitch can't give you a silently bad backup. Each backup is saved automatically in the app's backups folder as a `.817ee` file: JSON with a readable hex dump and a SHA-256 checksum. The calibration values are shown by menu name and can be copied as text, so it's easy to keep a written copy as well.
 
 **Restore.** Open a backup, press *Compare with radio*, review what will change, confirm, restore. Its safeguards:
 
@@ -75,13 +77,14 @@ The FT-817's EEPROM holds everything the radio knows about itself, including the
 |---|---|
 | Addresses 0x00–0x05 are never written | 0–3 are an integrity checksum; changing them can make the radio wipe its EEPROM. 4–5 identify the hardware version. |
 | Refuses a backup whose version bytes differ from the radio's | Stops a restore from another model or variant. |
+| Warns when the backup is most likely from **another radio**: more than 8 of the 76 calibration values differ from the radio's | A radio's own backup normally matches its calibration exactly. Two FT-817NDs compared in testing differed in 64 of 76 values. To go ahead anyway you must type DIFFERENT RADIO. |
 | A fresh backup of the radio is saved before anything is written | Every restore can be undone. |
 | Only bytes that differ are written; each is read back, with retries | Usually a few dozen writes instead of thousands; stops if writes stop verifying. |
 | The radio's current CAT baud rate (0x64 bits 7–6) is kept | Restoring a different rate would cut the link halfway through. |
 | Radio must be in receive with the dial LOCK off | The FT-817 can stop answering CAT while locked. |
 | A full read-back at the end | You see exactly which bytes, if any, don't match. |
 
-Restoring **calibration from another radio** onto yours would mis-calibrate it: each radio's values are its own. The app can't tell two FT-817s apart, so restore only your own radio's backups.
+Restoring **calibration from another radio** onto yours would mis-calibrate it: each radio's values are its own. The app warns you when a backup looks like it came from another radio, but it can't be certain. If you own more than one radio, keep each radio's backups in its own folder and restore only that radio's backups.
 
 **First real-radio test (recommended):** back up, change one harmless setting on the radio (for example beep volume), then restore and check that the setting comes back.
 

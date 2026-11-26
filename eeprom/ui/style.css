@@ -84,3 +84,8 @@ summary { cursor: pointer; color: var(--text); font-weight: 600; font-size: 13px
 footer { position: fixed; bottom: 0; left: 0; right: 0; padding: 6px 18px; background: var(--bg); border-top: 1px solid var(--line); }
 .progress:not(.hidden) ~ footer { display: none; }
 .hidden { display: none !important; }
+.danger-box { border: 1px solid #c0443f; background: #3a1c1b; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px; }
+.danger-box h3 { color: #ff8a80; margin: 0 0 6px; }
+.danger-box p { margin: 6px 0; }
+.other-radio { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.other-radio input { font: inherit; padding: 6px 8px; border-radius: 4px; border: 1px solid #b8433e; background: #1a1212; color: inherit; max-width: 260px; }

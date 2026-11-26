@@ -44,6 +44,7 @@
   }
   function syncDemo() {
     $("demo-change").classList.toggle("hidden", prefs.source !== "demo");
+    $("demo-other").classList.toggle("hidden", prefs.source !== "demo");
     $("baud").disabled = prefs.source === "demo";
   }
   $("source").addEventListener("change", (e) => { prefs.source = e.target.value; savePrefs(); syncDemo(); invalidatePlan(); });
@@ -57,7 +58,7 @@
     busy = b;
     $("progress").classList.toggle("hidden", !b);
     if (b) { $("pphase").textContent = label || "Working…"; $("pcount").textContent = ""; $("pfill").style.width = "0"; }
-    for (const id of ["backup-btn", "save-as-btn", "open-btn", "compare-btn", "restore-btn", "refresh", "source", "baud", "demo-change"]) {
+    for (const id of ["backup-btn", "save-as-btn", "open-btn", "compare-btn", "restore-btn", "refresh", "source", "baud", "demo-change", "demo-other", "other-text"]) {
       const el = $(id);
       if (b) { el.dataset.wasDisabled = el.disabled ? "1" : ""; el.disabled = true; }
       else { el.disabled = el.dataset.wasDisabled === "1"; }
@@ -127,11 +128,29 @@
   });
 
   // ------------------------------------------------------------ restore
+  let otherRadio = false;
   function invalidatePlan() {
     $("plan-result").classList.add("hidden");
     $("confirm-wrap").classList.add("hidden");
     $("confirm").checked = false;
     $("restore-btn").disabled = true;
+    $("other-wrap").classList.add("hidden");
+    $("other-text").value = "";
+    otherRadio = false;
+  }
+
+  function updateRestoreBtn() {
+    const typed = $("other-text").value.trim().toUpperCase() === "DIFFERENT RADIO";
+    $("restore-btn").disabled = !$("confirm").checked || (otherRadio && !typed);
+  }
+
+  function otherRadioWarning(p) {
+    const rows = p.cal_differences.map((d) =>
+      `<tr><td>${String(d.item).padStart(2, "0")} ${esc(CAL_NAMES[d.item - 1])}</td><td>${d.radio}</td><td>→ ${d.backup}</td></tr>`).join("");
+    return `<div class="danger-box"><h3>⚠ This is most likely a backup from another radio</h3>
+      <p>${p.cal_differences.length} of the 76 calibration values in this backup differ from the radio connected now. A radio's own backup normally matches its calibration exactly, because the calibration doesn't change in normal use.</p>
+      <p>Every FT-817 is calibrated individually at the factory. Restoring another radio's calibration can make the S-meter, power output, meters and deviation wrong on this radio. If you have more than one radio, check that you opened the right file.</p>
+      <details><summary>Show the ${p.cal_differences.length} differing calibration values</summary><div class="changes"><table><tr><th>Item</th><th>Radio now</th><th>Backup</th></tr>${rows}</table></div></details></div>`;
   }
 
   $("open-btn").addEventListener("click", async () => {
@@ -164,7 +183,8 @@
       } else {
         const r = p.regions;
         const rows = p.changes.map((w) => `<tr><td>0x${w.addr.toString(16).toUpperCase().padStart(4, "0")}</td><td>${region(w.addr)}</td><td>${hex(w.was)}</td><td>→ ${hex(w.data)}</td></tr>`).join("");
-        show("plan-result", "warn", `<h3>${p.bytes_changed} byte${p.bytes_changed === 1 ? "" : "s"} differ from the backup</h3>
+        otherRadio = p.likely_other_radio;
+        show("plan-result", "warn", `${otherRadio ? otherRadioWarning(p) : ""}<h3>${p.bytes_changed} byte${p.bytes_changed === 1 ? "" : "s"} differ from the backup</h3>
           <div class="regions">
             <span class="${r.calibration ? "cal" : ""}">Calibration: ${r.calibration}</span>
             <span>Settings: ${r.settings}</span><span>VFOs/home: ${r.vfos}</span><span>Memories: ${r.memories}</span>
@@ -173,18 +193,21 @@
           <p class="note">Pre-restore backup saved to <code>${esc(p.pre_restore_backup)}</code>. To undo this restore, restore that file.</p>
           <details><summary>Show the ${p.writes} write${p.writes === 1 ? "" : "s"}</summary><div class="changes"><table><tr><th>Address</th><th>Area</th><th>Radio now</th><th>Backup</th></tr>${rows}</table></div></details>`);
         $("restore-btn").textContent = `Restore ${p.bytes_changed} byte${p.bytes_changed === 1 ? "" : "s"}`;
+        $("other-wrap").classList.toggle("hidden", !otherRadio);
         $("confirm-wrap").classList.remove("hidden");
+        updateRestoreBtn();
       }
     } catch (e) { errorBox("plan-result", e); }
     setBusy(false);
   });
 
-  $("confirm").addEventListener("change", (e) => { $("restore-btn").disabled = !e.target.checked; });
+  $("confirm").addEventListener("change", updateRestoreBtn);
+  $("other-text").addEventListener("input", updateRestoreBtn);
 
   $("restore-btn").addEventListener("click", async () => {
     setBusy(true, "Writing…");
     try {
-      const rep = await invoke("run_restore", { source: source() });
+      const rep = await invoke("run_restore", { source: source(), otherRadioAck: otherRadio });
       if (rep.final_mismatches.length === 0) {
         show("restore-result", "ok", `<h3>Restore complete and verified</h3><p class="note">Wrote ${rep.written} byte pair${rep.written === 1 ? "" : "s"}${rep.retried ? ` (${rep.retried} retried)` : ""}. A full read-back matches the backup. You can power-cycle the radio now.</p>`);
       } else {
@@ -197,10 +220,17 @@
   });
 
   $("demo-change").addEventListener("click", async () => {
-    const n = await invoke("demo_change_radio");
+    const n = await invoke("demo_change_radio", { otherRadio: false });
     invalidatePlan();
     $("demo-change").textContent = `Changed ${n} bytes on the simulated radio ✓`;
     setTimeout(() => ($("demo-change").textContent = "Demo: change the simulated radio"), 2500);
+  });
+
+  $("demo-other").addEventListener("click", async () => {
+    const n = await invoke("demo_change_radio", { otherRadio: true });
+    invalidatePlan();
+    $("demo-other").textContent = `Changed ${n} calibration values ✓`;
+    setTimeout(() => ($("demo-other").textContent = "Demo: make it another radio"), 2500);
   });
 
   function hex(pair) { return pair.map((b) => b.toString(16).toUpperCase().padStart(2, "0")).join(" "); }

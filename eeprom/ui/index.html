@@ -44,10 +44,15 @@
         <button class="btn" id="open-btn">Open backup…</button>
         <button class="btn" id="compare-btn" disabled>Compare with radio</button>
         <button class="linkbtn hidden" id="demo-change" type="button">Demo: change the simulated radio</button>
+        <button class="linkbtn hidden" id="demo-other" type="button">Demo: make it another radio</button>
       </div>
       <div class="result hidden" id="loaded-result"></div>
       <div class="result hidden" id="plan-result"></div>
       <div class="confirm hidden" id="confirm-wrap">
+        <div class="other-radio hidden" id="other-wrap">
+          <label for="other-text">This backup is most likely from another radio. To restore it anyway, type <b>DIFFERENT RADIO</b>:</label>
+          <input type="text" id="other-text" autocomplete="off" spellcheck="false" />
+        </div>
         <label class="check"><input type="checkbox" id="confirm" /> I understand this writes to my radio's EEPROM. The radio is in receive, LOCK is off, and I won't touch it until the restore finishes.</label>
         <button class="btn danger" id="restore-btn" disabled>Restore</button>
       </div>

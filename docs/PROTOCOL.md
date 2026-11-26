@@ -73,3 +73,14 @@ Hamlib reads `55`, `59`, `65` and `7A` at the same addresses on both radios. The
 ## rigctld mode
 
 Commands used: `f`, `m`, `t`, `v`, `s`, `l RAWSTR` (receive), `\get_dcd`, and `l RFPOWER_METER`, `l SWR`, `l ALC` (transmit). Errors (`RPRT -n`) for unsupported items are shown as "not available". The TX meter values are scaled to the 0–15 bar and are approximate.
+
+## Field notes from real radios (Nov 2026)
+
+Two FT-817ND radios, both unmodified, bought from different owners:
+
+- Bytes 0x00–0x03 read `A5 5A A5 5A` on both radios, so they look like a fixed marker rather than a per-radio checksum. The app still never writes them.
+- Version bytes (0x04–0x05) differ between the two: `CE BF` and `D8 BF`.
+- 64 of the 76 soft-calibration values differ between the two radios. This is the basis for the app's "most likely another radio" warning (threshold: more than 8 differing values).
+- The first radio tested did not answer an EEPROM read past 0x1925 with the single `00` byte described in published sources, so the app now reads exactly 0x0000–0x1925 and never asks past the end.
+
+Not tested: the original FT-817 and the FT-818.

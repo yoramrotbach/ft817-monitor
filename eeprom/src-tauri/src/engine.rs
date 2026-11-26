@@ -45,6 +45,7 @@ pub enum EeError {
     VersionMismatch { radio: [u8; 2], backup: [u8; 2] },
     LinkUnreliable(usize),
     TooShort(usize),
+    OtherRadio(usize),
 }
 
 impl fmt::Display for EeError {
@@ -60,6 +61,7 @@ impl fmt::Display for EeError {
             EeError::LengthMismatch { radio, backup } => write!(f, "The backup is {backup} bytes but this radio's EEPROM is {radio} bytes. It belongs to a different model."),
             EeError::VersionMismatch { radio, backup } => write!(f, "The backup's radio version bytes ({:02X} {:02X}) don't match this radio ({:02X} {:02X}). It is from a different model or hardware variant, so restoring is refused.", backup[0], backup[1], radio[0], radio[1]),
             EeError::LinkUnreliable(a) => write!(f, "Writes stopped verifying at 0x{a:04X}; the restore was stopped. Your pre-restore backup is saved, so nothing is lost: check the cable and run the restore again."),
+            EeError::OtherRadio(n) => write!(f, "{n} of the 76 calibration values differ between this backup and the radio, so the backup is most likely from another radio. The restore was not started."),
             EeError::TooShort(n) => write!(f, "The radio reported only {n} EEPROM bytes, which is too small to be valid."),
         }
     }
@@ -277,6 +279,35 @@ pub struct Plan {
     pub regions: RegionCounts,
     /// The backup's CAT rate differed and the radio's current rate was kept.
     pub cat_rate_kept: bool,
+    /// Soft-calibration items (1-76) whose value differs between the radio and the backup.
+    pub cal_differences: Vec<CalDiff>,
+    /// More than FOREIGN_RADIO_THRESHOLD calibration items differ: the backup
+    /// most likely comes from another radio. A restore then needs an explicit
+    /// acknowledgment.
+    pub likely_other_radio: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CalDiff {
+    /// Soft-calibration menu item number, 1-76.
+    pub item: usize,
+    pub radio: u8,
+    pub backup: u8,
+}
+
+/// Soft-calibration items 1-76 live at 0x07-0x52 (address = item + 6).
+pub const CAL_ITEMS: std::ops::RangeInclusive<usize> = 1..=76;
+/// A radio's own backup normally differs in 0 calibration items. Two
+/// different FT-817NDs compared in testing differed in 64 of 76.
+pub const FOREIGN_RADIO_THRESHOLD: usize = 8;
+
+pub fn calibration_differences(current: &[u8], backup: &[u8]) -> Vec<CalDiff> {
+    CAL_ITEMS
+        .filter_map(|item| {
+            let a = item + 6;
+            (current[a] != backup[a]).then(|| CalDiff { item, radio: current[a], backup: backup[a] })
+        })
+        .collect()
 }
 
 /// Region names follow the FT-817 memory map (approximate on the FT-818).
@@ -311,6 +342,8 @@ pub fn plan(current: &[u8], backup: &[u8]) -> Result<Plan, EeError> {
             backup: [backup[4], backup[5]],
         });
     }
+    let cal_differences = calibration_differences(current, backup);
+    let likely_other_radio = cal_differences.len() > FOREIGN_RADIO_THRESHOLD;
     let target = target_image(current, backup);
     let mut writes = Vec::new();
     let mut regions = RegionCounts::default();
@@ -345,7 +378,7 @@ pub fn plan(current: &[u8], backup: &[u8]) -> Result<Plan, EeError> {
     }
     let cat_rate_kept = CAT_RATE_ADDR < backup.len()
         && (backup[CAT_RATE_ADDR] & CAT_RATE_MASK) != (current[CAT_RATE_ADDR] & CAT_RATE_MASK);
-    Ok(Plan { writes, bytes_changed, regions, cat_rate_kept })
+    Ok(Plan { writes, bytes_changed, regions, cat_rate_kept, cal_differences, likely_other_radio })
 }
 
 fn region_slot(r: &mut RegionCounts, addr: usize) -> &mut usize {
@@ -366,7 +399,10 @@ pub struct RestoreReport {
 }
 
 /// Execute a plan made from `current` (which must be fresh) and `backup`.
-pub fn restore(ctx: &mut Ctx, plan: &Plan, current: &[u8], backup: &[u8]) -> Result<RestoreReport, EeError> {
+pub fn restore(ctx: &mut Ctx, plan: &Plan, current: &[u8], backup: &[u8], other_radio_ack: bool) -> Result<RestoreReport, EeError> {
+    if plan.likely_other_radio && !other_radio_ack {
+        return Err(EeError::OtherRadio(plan.cal_differences.len()));
+    }
     preflight(ctx.port)?;
     // Re-check the version bytes on the live radio right before writing.
     if let Pair::Data(v) = read_pair(ctx.port, 4)? {
@@ -459,6 +495,43 @@ mod tests {
         f(&mut ctx)
     }
 
+    /// Calibration items 1-76 of two real FT-817NDs (field test, Nov 2026).
+    const CAL_RADIO_A: [u8; 76] = [73, 68, 80, 73, 65, 78, 67, 63, 88, 124, 34, 71, 72, 78, 1, 2, 138, 91, 91, 91, 91, 90, 98, 104, 62, 24, 5, 108, 61, 23, 5, 101, 58, 23, 4, 109, 63, 24, 7, 94, 57, 22, 5, 107, 63, 24, 6, 79, 66, 72, 255, 161, 255, 70, 71, 73, 72, 64, 69, 182, 128, 16, 14, 21, 19, 16, 56, 255, 182, 221, 110, 176, 178, 135, 3, 3];
+    const CAL_RADIO_B: [u8; 76] = [73, 67, 76, 68, 77, 70, 66, 64, 80, 114, 34, 63, 72, 71, 1, 1, 136, 150, 150, 150, 95, 95, 100, 174, 116, 35, 15, 170, 113, 34, 15, 188, 125, 38, 17, 147, 98, 30, 13, 137, 91, 27, 12, 126, 84, 25, 11, 73, 65, 70, 114, 77, 55, 65, 67, 70, 70, 61, 66, 183, 122, 12, 13, 19, 19, 16, 34, 255, 221, 208, 102, 176, 178, 135, 3, 3];
+
+    #[test]
+    fn backup_from_another_radio_is_detected_and_needs_acknowledgment() {
+        let (r, mut port) = rig(0);
+        r.lock().unwrap().ee[7..=0x52].copy_from_slice(&CAL_RADIO_A);
+        let mut other = run(&mut port, |c| backup(c)).unwrap();
+        other[7..=0x52].copy_from_slice(&CAL_RADIO_B);
+        let current = run(&mut port, |c| backup(c)).unwrap();
+        let p = plan(&current, &other).unwrap();
+        assert_eq!(p.cal_differences.len(), 64);
+        assert!(p.likely_other_radio);
+        let writes_before = r.lock().unwrap().writes;
+        assert!(matches!(run(&mut port, |c| restore(c, &p, &current, &other, false)), Err(EeError::OtherRadio(64))));
+        assert_eq!(r.lock().unwrap().writes, writes_before, "nothing may be written without acknowledgment");
+        run(&mut port, |c| restore(c, &p, &current, &other, true)).unwrap();
+        assert_eq!(&r.lock().unwrap().ee[7..=0x52], &CAL_RADIO_B[..]);
+    }
+
+    #[test]
+    fn own_backup_with_a_few_calibration_changes_is_not_flagged() {
+        let (r, mut port) = rig(0);
+        let saved = run(&mut port, |c| backup(c)).unwrap();
+        {
+            let mut g = r.lock().unwrap();
+            for item in 1..=FOREIGN_RADIO_THRESHOLD {
+                g.ee[item + 6] ^= 0x01;
+            }
+        }
+        let current = run(&mut port, |c| backup(c)).unwrap();
+        let p = plan(&current, &saved).unwrap();
+        assert_eq!(p.cal_differences.len(), FOREIGN_RADIO_THRESHOLD);
+        assert!(!p.likely_other_radio);
+    }
+
     #[test]
     fn write_frame_refuses_header() {
         for a in 0..PROTECTED_END {
@@ -509,7 +582,7 @@ mod tests {
         assert_eq!(p.bytes_changed, 4);
         assert_eq!(p.regions.calibration, 1);
         assert!(p.writes.iter().all(|w| w.addr >= PROTECTED_END));
-        let rep = run(&mut port, |c| restore(c, &p, &current, &saved)).unwrap();
+        let rep = run(&mut port, |c| restore(c, &p, &current, &saved, false)).unwrap();
         assert!(rep.final_mismatches.is_empty(), "{:?}", rep.final_mismatches);
         let g = r.lock().unwrap();
         assert_eq!(g.ee, saved);
@@ -527,7 +600,7 @@ mod tests {
         r.lock().unwrap().fault_percent = 4;
         let current = run(&mut port, |c| backup(c)).unwrap();
         let p = plan(&current, &saved).unwrap();
-        let rep = run(&mut port, |c| restore(c, &p, &current, &saved)).unwrap();
+        let rep = run(&mut port, |c| restore(c, &p, &current, &saved, false)).unwrap();
         assert!(rep.final_mismatches.is_empty());
         assert_eq!(r.lock().unwrap().ee, saved);
     }

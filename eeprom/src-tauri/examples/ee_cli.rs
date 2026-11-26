@@ -43,7 +43,7 @@ fn main() {
         }
         "restore" => {
             if !a.iter().any(|x| x == "--yes") {
-                die("restore writes to the radio; add --yes to confirm");
+                die("restore writes to the radio; add --yes to confirm (and --different-radio to restore a backup from another radio)");
             }
             let text = std::fs::read_to_string(&file).unwrap_or_else(|e| die(&e.to_string()));
             let (backup, _) = backupfile::parse(&text).unwrap_or_else(|e| die(&e));
@@ -53,7 +53,11 @@ fn main() {
             eprintln!("Pre-restore backup saved to {pre}");
             let plan = engine::plan(&current, &backup).unwrap_or_else(|e| die(&e.to_string()));
             eprintln!("{} bytes differ ({} writes); CAT rate kept: {}", plan.bytes_changed, plan.writes.len(), plan.cat_rate_kept);
-            let rep = engine::restore(&mut ctx, &plan, &current, &backup).unwrap_or_else(|e| die(&e.to_string()));
+            if plan.likely_other_radio {
+                eprintln!("WARNING: {} of 76 calibration values differ; this is most likely a backup from another radio.", plan.cal_differences.len());
+            }
+            let ack = a.iter().any(|x| x == "--different-radio");
+            let rep = engine::restore(&mut ctx, &plan, &current, &backup, ack).unwrap_or_else(|e| die(&e.to_string()));
             println!("Wrote {} pairs ({} retries); mismatches after verify: {}", rep.written, rep.retried, rep.final_mismatches.len());
         }
         _ => die(usage),
