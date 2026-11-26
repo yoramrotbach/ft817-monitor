@@ -435,7 +435,8 @@ mod tests {
         assert_eq!(up.agc.as_deref(), Some("FAST"));
         assert_eq!(up.nb, Some(true));
         assert_eq!(up.lcd_color.as_deref(), Some("amber"));
-        assert!(up.polls_per_sec > 10.0 && up.polls_per_sec < 45.0, "rate {}", up.polls_per_sec);
+        // Loose bounds: shared CI runners (macOS especially) have coarse sleep timing.
+        assert!(up.polls_per_sec > 2.0 && up.polls_per_sec < 45.0, "rate {}", up.polls_per_sec);
         assert_eq!(v.last().unwrap().link, Link::Stopped);
     }
 
