@@ -83,9 +83,13 @@ fn link_up(st: &mut RigState, msg: &str) {
 
 /// Show the error, then count down to the next attempt, one update per second.
 fn fail_and_wait(st: &mut RigState, error: String, stop: &AtomicBool, emit: &impl Fn(&RigState)) {
+    fail_and_wait_for(st, error, RETRY_SECS, stop, emit)
+}
+
+fn fail_and_wait_for(st: &mut RigState, error: String, secs: u32, stop: &AtomicBool, emit: &impl Fn(&RigState)) {
     st.link = Link::Lost;
     st.error = Some(error);
-    for left in (1..=RETRY_SECS).rev() {
+    for left in (1..=secs).rev() {
         if stop.load(Ordering::Relaxed) {
             break;
         }
@@ -272,6 +276,11 @@ fn run_cat(
 
 // ---------------------------------------------------------------- rigctld
 
+const RIGCTLD_REPLY_TIMEOUT: Duration = Duration::from_secs(10);
+/// After rigctld stops answering, wait this long before reconnecting so it
+/// can finish the requests it's still working on.
+const RIGCTLD_RECOVER_SECS: u32 = 15;
+
 struct Rigctld {
     r: BufReader<TcpStream>,
     w: TcpStream,
@@ -284,7 +293,9 @@ impl Rigctld {
             .next()
             .ok_or_else(|| io::Error::other("cannot resolve host"))?;
         let s = TcpStream::connect_timeout(&addr, Duration::from_secs(2))?;
-        s.set_read_timeout(Some(Duration::from_millis(1500)))?;
+        // Hamlib's FT-817 driver retries a missed reply for several seconds;
+        // give it time rather than abandoning a busy rigctld.
+        s.set_read_timeout(Some(RIGCTLD_REPLY_TIMEOUT))?;
         s.set_nodelay(true)?;
         Ok(Self { r: BufReader::new(s.try_clone()?), w: s })
     }
@@ -465,15 +476,26 @@ fn run_rigctld(host: &str, port: u16, stop: &AtomicBool, emit: &impl Fn(&RigStat
                 }
                 st.polls_per_sec = rate.tick();
                 emit(&st);
-                // No fixed pause: each request already waits for the radio.
-                std::thread::sleep(Duration::from_millis(5));
+                // Gentle pace: the radio and other programs share rigctld.
+                std::thread::sleep(Duration::from_millis(100));
             }
             Ok(())
         })();
 
         if let Err(e) = result {
             st.errors += 1;
-            fail_and_wait(&mut st, format!("rigctld connection lost: {e}"), stop, emit);
+            if matches!(e.kind(), io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock) {
+                drop(rc); // close this connection; rigctld discards its pending requests
+                fail_and_wait_for(
+                    &mut st,
+                    format!("rigctld didn't answer within {} s. The radio may have missed a request; giving rigctld time to recover.", RIGCTLD_REPLY_TIMEOUT.as_secs()),
+                    RIGCTLD_RECOVER_SECS,
+                    stop,
+                    emit,
+                );
+            } else {
+                fail_and_wait(&mut st, format!("rigctld connection lost: {e}"), stop, emit);
+            }
         }
     }
 }
@@ -588,6 +610,27 @@ mod tests {
         assert!(r[1].is_none());
         assert_eq!(r[2].as_ref().unwrap(), &vec!["USB".to_string(), "2200".to_string()]);
         assert_eq!(reply_num(&r[3]), Some(0.0));
+    }
+
+
+    #[test]
+    fn slow_rigctld_reply_is_not_a_lost_connection() {
+        use std::io::{BufRead, BufReader, Write};
+        use std::net::TcpListener;
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            let (s, _) = l.accept().unwrap();
+            let mut w = s.try_clone().unwrap();
+            for _ in BufReader::new(s).lines() {
+                // Hamlib retrying a missed reply from the radio.
+                std::thread::sleep(Duration::from_secs(3));
+                w.write_all(b"14074000\n").unwrap();
+            }
+        });
+        let mut rc = Rigctld::connect("127.0.0.1", port).unwrap();
+        let r = rc.batch(&[("f", 1)]).unwrap();
+        assert_eq!(reply_num(&r[0]), Some(14074000.0));
     }
 
 }

@@ -54,6 +54,7 @@ Then choose "Hamlib rigctld" in Settings (default 127.0.0.1:4532) and set WSJT-X
 - Updates are slower than direct serial, because every reading goes through Hamlib's FT-817 driver.
 - MOD and the panel flags (AGC, NB, LOCK and so on) aren't available.
 - ALC above about a third of the scale reads as full, because Hamlib's ALC scale stops there.
+- Narrow is shown for CW, CWR and RTTY only. For FM-N and other narrow modes, Hamlib reports the normal filter width.
 - Hamlib doesn't recognize the FT-817ND's PKT mode code and reports no mode; the app shows that as PKT.
 - Meter scaling assumes Hamlib 4.6 or newer.
 
