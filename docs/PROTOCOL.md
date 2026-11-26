@@ -56,7 +56,7 @@ Hamlib's current code reads MOD and SWR from the same nibble, which can't be rig
 
 | Fact | Source | How the app uses it |
 |---|---|---|
-| Valid addresses are 0x0000–0x1925; reading past the end returns a single `00` | K | The end is found automatically and confirmed by asking twice more, so other models' sizes work too |
+| Valid addresses are 0x0000–0x1925; reading past the end returns a single `00` | K | The backup reads exactly 0x0000–0x1925 and never asks past the end: on a real FT-817 the out-of-range reply was not a single `00` (field report, Nov 2026), so probing for the end was unreliable |
 | 0x00–0x03 are an integrity checksum; changing them can wipe the EEPROM, calibration included | K | `write_frame()` refuses any address below 0x06 (unit tested); the simulator wipes itself if those bytes change |
 | 0x04–0x05 identify the hardware version | K | A restore is refused if they differ between backup and radio |
 | 0x07–0x52 = soft-cal menu items 1–76 (address = item + 6); VCC calibration at 0x53; items 75–76 are signed | K | Shown by name in the app; counted as "calibration" in the restore summary |

@@ -24,7 +24,10 @@ pub const VERSION_BYTES: std::ops::Range<usize> = 4..6;
 pub const CAT_RATE_ADDR: usize = 0x64;
 pub const CAT_RATE_MASK: u8 = 0xC0;
 pub const CAL_RANGE: std::ops::RangeInclusive<usize> = 0x07..=0x53; // 76 soft-cal + VCC
-const MAX_LEN: usize = 0x2000; // 64 kbit EEPROM
+/// Documented FT-817/818 EEPROM size: valid addresses 0x0000-0x1925.
+/// The backup reads exactly this range and never asks past the end, because
+/// real radios don't all answer out-of-range reads the same way.
+pub const EE_LEN: usize = 0x1926;
 const OP_WRITE_EEPROM: u8 = 0xBC;
 const WRITE_SETTLE: Duration = Duration::from_millis(30);
 const READ_RETRIES: u32 = 4;
@@ -32,6 +35,7 @@ const READ_RETRIES: u32 = 4;
 #[derive(Debug)]
 pub enum EeError {
     Io(io::Error),
+    Read { addr: usize, detail: String },
     Cancelled,
     Transmitting,
     DialLocked,
@@ -47,6 +51,7 @@ impl fmt::Display for EeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             EeError::Io(e) => write!(f, "No reliable reply from the radio ({e}). Check the cable, power and baud rate."),
+            EeError::Read { addr, detail } => write!(f, "No reliable reply from the radio when reading EEPROM address 0x{addr:04X} ({detail}). Check the cable, power and baud rate."),
             EeError::Cancelled => write!(f, "Cancelled."),
             EeError::Transmitting => write!(f, "The radio is transmitting. Put it in receive and try again."),
             EeError::DialLocked => write!(f, "The radio's dial LOCK is on. The FT-817 can stop answering CAT commands while locked; turn LOCK off and try again."),
@@ -110,17 +115,20 @@ enum Pair {
 }
 
 fn read_pair(port: &mut dyn CatPort, addr: usize) -> Result<Pair, EeError> {
-    let mut last_err = None;
+    let mut detail = String::new();
     for _ in 0..READ_RETRIES {
         match port.transact(cat::eeprom_read(addr as u16), 2) {
             Ok(r) if r.len() == 2 => return Ok(Pair::Data([r[0], r[1]])),
             Ok(r) if r.len() == 1 && r[0] == 0 => return Ok(Pair::End),
-            Ok(_) => last_err = Some(io::Error::new(io::ErrorKind::InvalidData, "short reply")),
-            Err(e) => last_err = Some(e),
+            Ok(r) => {
+                let hex: Vec<String> = r.iter().map(|b| format!("{b:02X}")).collect();
+                detail = format!("got {} byte(s): {}", r.len(), hex.join(" "));
+            }
+            Err(e) => detail = e.to_string(),
         }
         std::thread::sleep(Duration::from_millis(20));
     }
-    Err(EeError::Io(last_err.unwrap()))
+    Err(EeError::Read { addr, detail })
 }
 
 /// A 1-byte zero reply means "past the end", but the same thing can happen
@@ -169,15 +177,15 @@ pub fn preflight(port: &mut dyn CatPort) -> Result<(), EeError> {
     Ok(())
 }
 
-fn read_pass(ctx: &mut Ctx, label: &str, expect_len: Option<usize>) -> Result<Vec<u8>, EeError> {
-    let total = expect_len.unwrap_or(0x1926);
-    let mut img = Vec::with_capacity(total);
+fn read_pass(ctx: &mut Ctx, label: &str) -> Result<Vec<u8>, EeError> {
+    let mut img = Vec::with_capacity(EE_LEN);
     let mut addr = 0usize;
-    while addr < MAX_LEN {
+    while addr < EE_LEN {
         ctx.check_cancel()?;
         match read_pair(ctx.port, addr)? {
             Pair::Data(d) => img.extend_from_slice(&d),
             Pair::End => {
+                // A radio with a smaller EEPROM than documented.
                 if confirmed_end(ctx.port, addr)? {
                     break;
                 }
@@ -186,9 +194,10 @@ fn read_pass(ctx: &mut Ctx, label: &str, expect_len: Option<usize>) -> Result<Ve
         }
         addr += 2;
         if addr % 64 == 0 {
-            ctx.report(label, addr.min(total), total);
+            ctx.report(label, addr.min(EE_LEN), EE_LEN);
         }
     }
+    img.truncate(EE_LEN);
     ctx.report(label, img.len(), img.len());
     if img.len() < 0x400 {
         return Err(EeError::TooShort(img.len()));
@@ -199,8 +208,8 @@ fn read_pass(ctx: &mut Ctx, label: &str, expect_len: Option<usize>) -> Result<Ve
 /// Read the whole EEPROM twice and reconcile any differences by re-reading.
 pub fn backup(ctx: &mut Ctx) -> Result<Vec<u8>, EeError> {
     preflight(ctx.port)?;
-    let mut a = read_pass(ctx, "Reading EEPROM (pass 1 of 2)", None)?;
-    let b = read_pass(ctx, "Verifying (pass 2 of 2)", Some(a.len()))?;
+    let mut a = read_pass(ctx, "Reading EEPROM (pass 1 of 2)")?;
+    let b = read_pass(ctx, "Verifying (pass 2 of 2)")?;
     if a.len() != b.len() {
         return Err(EeError::Unstable(vec![a.len().min(b.len())]));
     }
@@ -401,7 +410,7 @@ pub fn restore(ctx: &mut Ctx, plan: &Plan, current: &[u8], backup: &[u8]) -> Res
 
     // Final check: read everything again and compare with what we intended.
     let target = target_image(current, backup);
-    let after = read_pass(ctx, "Final verification", Some(target.len()))?;
+    let after = read_pass(ctx, "Final verification")?;
     let final_mismatches = if after.len() != target.len() {
         vec![after.len().min(target.len())]
     } else {
@@ -464,6 +473,17 @@ mod tests {
         let img = run(&mut port, |c| backup(c)).unwrap();
         assert_eq!(img.len(), SIM_EE_LEN);
         assert_eq!(img, r.lock().unwrap().ee);
+    }
+
+    #[test]
+    fn backup_never_reads_past_the_documented_end() {
+        // Real radios differ here: a non-zero byte, two junk bytes, or silence.
+        for reply in [vec![0x1F], vec![0xAA, 0x55], vec![]] {
+            let (r, mut port) = rig(0);
+            r.lock().unwrap().past_end_reply = Some(reply.clone());
+            let img = run(&mut port, |c| backup(c)).unwrap_or_else(|e| panic!("{reply:?}: {e}"));
+            assert_eq!(img, r.lock().unwrap().ee);
+        }
     }
 
     #[test]

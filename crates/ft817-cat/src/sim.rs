@@ -23,6 +23,8 @@ pub struct SimRadio {
     start: Instant,
     rng: u64,
     animate: bool,
+    /// Reply to an EEPROM read past the end (None = one zero byte).
+    pub past_end_reply: Option<Vec<u8>>,
     /// Full EEPROM image.
     pub ee: Vec<u8>,
     /// Percentage (0-100) of replies that are dropped or corrupted.
@@ -85,6 +87,7 @@ impl SimRadio {
             rng: 0x9E37_79B9_7F4A_7C15,
             animate: true,
             ee: default_image(),
+            past_end_reply: None,
             fault_percent: 0,
             writes: 0,
             wiped: false,
@@ -230,7 +233,9 @@ impl SimRadio {
             cat::OP_READ_EEPROM => {
                 let a = (((frame[0] as u16) << 8) | frame[1] as u16) as usize;
                 if a >= self.ee.len() {
-                    vec![0x00] // out of range: one zero byte
+                    // Documented: one zero byte. Tests can override this to
+                    // mimic radios that answer differently past the end.
+                    self.past_end_reply.clone().unwrap_or_else(|| vec![0x00])
                 } else {
                     vec![self.ee_read(a, &s), self.ee_read(a + 1, &s)]
                 }
