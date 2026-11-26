@@ -2,7 +2,6 @@
 //! cable or running on a box with no display.
 //!
 //!   cargo run --example cli_monitor -- serial /dev/ttyUSB0 38400 [--bd]
-//!   cargo run --example cli_monitor -- rigctld 127.0.0.1 4532
 //!   cargo run --example cli_monitor -- demo
 
 use ft817_monitor_lib::poller::{run, MonitorConfig, Source};
@@ -15,10 +14,6 @@ fn main() {
         Some("serial") => Source::Serial {
             port: a.get(1).cloned().expect("port"),
             baud: a.get(2).and_then(|b| b.parse().ok()).unwrap_or(38400),
-        },
-        Some("rigctld") => Source::Rigctld {
-            host: a.get(1).cloned().unwrap_or_else(|| "127.0.0.1".into()),
-            port: a.get(2).and_then(|p| p.parse().ok()).unwrap_or(4532),
         },
         _ => Source::Demo,
     };

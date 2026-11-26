@@ -44,7 +44,7 @@ Command line, same engine: `cargo run -p ft817-eeprom --example ee_cli -- backup
 
 ```
 crates/ft817-cat/           shared, read-only: CAT frames and decoders, serial link, simulated FT-817 (with EEPROM)
-src-tauri/, ui/             817 Monitor (polling loops, rigctld, display)
+src-tauri/, ui/             817 Monitor (polling loop, display)
 eeprom/src-tauri/src/engine.rs      817 EEPROM: backup, restore plan, guarded writes (the only write code)
 eeprom/src-tauri/src/backupfile.rs  the .817ee file format
 eeprom/ui/                  817 EEPROM window

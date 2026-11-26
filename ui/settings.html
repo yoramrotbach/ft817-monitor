@@ -12,8 +12,7 @@
 
     <fieldset>
       <legend>Connection</legend>
-      <label class="radio"><input type="radio" name="kind" value="serial" checked /> Direct serial (full detail, uses the CAT port alone)</label>
-      <label class="radio"><input type="radio" name="kind" value="rigctld" /> Hamlib rigctld (share the radio with WSJT-X, loggers)</label>
+      <label class="radio"><input type="radio" name="kind" value="serial" checked /> Direct serial (uses the CAT port alone)</label>
       <label class="radio"><input type="radio" name="kind" value="demo" /> Demo (simulated radio, no hardware)</label>
     </fieldset>
 
@@ -30,15 +29,6 @@
         </select>
       </div>
       <p class="hint">Must match the radio's CAT RATE menu setting. Format is fixed at 8N2. RTS and DTR are set low right after the port opens, because some interfaces (Digirig and similar) key the transmitter on them.</p>
-    </fieldset>
-
-    <fieldset id="rigctld-opts" class="hidden">
-      <legend>rigctld</legend>
-      <div class="field">
-        <label for="host">Host</label><input id="host" value="127.0.0.1" />
-        <label for="tcp-port">Port</label><input id="tcp-port" type="number" value="4532" />
-      </div>
-      <p class="hint">Example: <code>rigctld -m 1020 -r COM3 -s 38400</code> (FT-817; use <code>-m 1041</code> for the FT-818). Panel flags such as AGC and NB aren't available this way.</p>
     </fieldset>
 
     <fieldset>

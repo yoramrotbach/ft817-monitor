@@ -36,27 +36,11 @@ The LCD color follows the radio's own color setting (menu "Color": blue or amber
 
 ## Connecting
 
-**Direct serial (full detail).** Connect the radio's ACC jack to the computer with a CAT cable (CT-62 type or similar) or an interface such as the Digirig. In Settings, choose the port and the baud rate that matches the radio's CAT RATE menu setting (4800, 9600 or 38400). The link is fixed at 8 data bits, no parity, 2 stop bits.
+**Direct serial.** Connect the radio's ACC jack to the computer with a CAT cable (CT-62 type or similar) or an interface such as the Digirig. In Settings, choose the port and the baud rate that matches the radio's CAT RATE menu setting (4800, 9600 or 38400). The link is fixed at 8 data bits, no parity, 2 stop bits.
 
-- Only one program can use the CAT port at a time. A hardware CAT display on the same ACC jack, WSJT-X or a logger will conflict with it.
+- **The monitor needs the CAT port to itself.** Only one program can use it at a time, so WSJT-X, a logger, Hamlib rigctld or a hardware CAT display on the same ACC jack can't run alongside it. (Sharing through Hamlib rigctld was tried and removed: Hamlib's FT-817 driver couldn't show PKT or FM-N, limited the meters, and stalled for about 30 seconds after some transmissions.)
 - RTS and DTR are set low right after the port opens, because some interfaces key the transmitter on them.
 - The app polls about 40 cycles per second (around 100–120 frames per second), similar to established hardware displays.
-
-**Hamlib rigctld (share the radio).** To run the monitor alongside WSJT-X or a logger, let rigctld own the port and point everything at it:
-
-```
-rigctld -m 1020 -r COM3 -s 38400      # FT-817 / FT-817ND
-rigctld -m 1041 -r /dev/ttyUSB0 -s 38400   # FT-818
-```
-
-Then choose "Hamlib rigctld" in Settings (default 127.0.0.1:4532) and set WSJT-X to "Hamlib NET rigctl". This mode shows frequency, mode (including narrow), VFO, split, S-meter, PTT, power, SWR and ALC. It's a basic mode with limits that come from Hamlib:
-
-- Updates are slower than direct serial, because every reading goes through Hamlib's FT-817 driver.
-- MOD and the panel flags (AGC, NB, LOCK and so on) aren't available.
-- ALC above about a third of the scale reads as full, because Hamlib's ALC scale stops there.
-- Narrow is shown for CW, CWR and RTTY only. For FM-N and other narrow modes, Hamlib reports the normal filter width.
-- Hamlib doesn't recognize the FT-817ND's PKT mode code and reports no mode; the app shows that as PKT.
-- Meter scaling assumes Hamlib 4.6 or newer.
 
 **Demo.** A built-in simulated FT-817 that cycles through FT8 on 20 m, CW on 40 m and FM on 2 m. You can also start the app with the `--demo` argument (on Linux: `ft817-monitor --demo`).
 

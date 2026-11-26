@@ -9,7 +9,7 @@
 
   // Settings that change how the app talks to the radio. Changing any of
   // these restarts the connection when the window is closed.
-  const CONNECTION_KEYS = new Set(["kind", "port", "baud", "host", "tcpPort", "readBd"]);
+  const CONNECTION_KEYS = new Set(["kind", "port", "baud", "readBd"]);
 
   function send(key) {
     if (CONNECTION_KEYS.has(key)) {
@@ -47,10 +47,7 @@
   function syncForm() {
     document.querySelectorAll('input[name="kind"]').forEach((r) => (r.checked = r.value === cfg.kind));
     $("serial-opts").classList.toggle("hidden", cfg.kind !== "serial");
-    $("rigctld-opts").classList.toggle("hidden", cfg.kind !== "rigctld");
     $("baud").value = cfg.baud;
-    $("host").value = cfg.host;
-    $("tcp-port").value = cfg.tcpPort;
     $("read-bd").checked = cfg.readBd;
     $("theme").value = cfg.theme;
     $("on-top").checked = cfg.onTop;
@@ -69,8 +66,6 @@
       r.addEventListener("change", () => { cfg.kind = r.value; syncForm(); send("kind"); }));
     bind("port", "port");
     bind("baud", "baud");
-    bind("host", "host", "input");
-    bind("tcp-port", "tcpPort", "input", Number);
     bind("read-bd", "readBd");
     bind("theme", "theme");     // applied live in the display window
     bind("on-top", "onTop");    // applied live in the display window

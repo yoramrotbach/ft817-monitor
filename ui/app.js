@@ -9,13 +9,16 @@
 
   // ------------------------------------------------------------ settings
   const DEFAULTS = {
-    kind: "serial", port: "", baud: "38400", host: "127.0.0.1", tcpPort: 4532,
+    kind: "serial", port: "", baud: "38400",
     readBd: false, theme: "radio", onTop: false, autoConnect: false,
   };
   let cfg = { ...DEFAULTS };
   try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem("ft817mon") || "{}") }; } catch (_) {}
   // The meter layout is fixed now; drop the old setting.
   delete cfg.meterMap; delete cfg.meterMapV;
+  // rigctld (Hamlib) support was removed; fall back to direct serial.
+  if (cfg.kind === "rigctld") cfg.kind = "serial";
+  delete cfg.host; delete cfg.tcpPort;
   const save = () => { try { localStorage.setItem("ft817mon", JSON.stringify(cfg)); } catch (_) {} };
 
   // ------------------------------------------------------------ meters
@@ -154,9 +157,7 @@
   function monitorConfig() {
     const source = cfg.kind === "serial"
       ? { kind: "serial", port: cfg.port, baud: Number(cfg.baud) }
-      : cfg.kind === "rigctld"
-        ? { kind: "rigctld", host: cfg.host, port: Number(cfg.tcpPort) }
-        : { kind: "demo" };
+      : { kind: "demo" };
     return { source, read_tx_meters: cfg.readBd };
   }
 

@@ -52,7 +52,6 @@ select {
 }
 select option { background: #1c2128; color: var(--ui-text); }
 #port { flex: 1; min-width: 0; }
-#host { width: 130px; } #tcp-port { width: 80px; }
 .hint { font-size: 11.5px; color: var(--ui-dim); margin: 6px 0 0; line-height: 1.4; }
 .hint.warn { color: #d8b468; }
 code { font-family: var(--mono); font-size: 11px; background: #1c2128; padding: 1px 4px; border-radius: 3px; }

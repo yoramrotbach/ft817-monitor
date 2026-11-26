@@ -83,3 +83,13 @@ Two FT-817ND radios, both unmodified, bought from different owners:
 - The first radio tested did not answer an EEPROM read past 0x1925 with the single `00` byte described in published sources, so the app now reads exactly 0x0000–0x1925 and never asks past the end.
 
 Not tested: the original FT-817 and the FT-818.
+
+## Why Hamlib rigctld support was removed (Nov 2026)
+
+Tested with Hamlib 4.7.2 on Windows and a real FT-817ND:
+
+- PKT (`FC`) isn't recognized, so Hamlib reports no mode. FM-N isn't reported as narrow, because the driver lists no narrow FM filter.
+- Meters come through Hamlib's calibration tables; MOD isn't available and ALC saturates at raw 5.
+- When a `BD` request gets the 1-byte "not transmitting" reply (for example right after unkeying), the driver waits for a second byte, retries six times at about 4.5 s each, then closes and reopens the port: a stall of about 27 seconds.
+
+817 Monitor therefore talks to the radio only directly over the serial port.
