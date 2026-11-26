@@ -49,7 +49,7 @@ rigctld -m 1020 -r COM3 -s 38400      # FT-817 / FT-817ND
 rigctld -m 1041 -r /dev/ttyUSB0 -s 38400   # FT-818
 ```
 
-Then choose "Hamlib rigctld" in Settings (default 127.0.0.1:4532) and set WSJT-X to "Hamlib NET rigctl". This mode shows frequency, mode, VFO, split, S-meter, PTT and power output. SWR, ALC and MOD aren't shown, because Hamlib's FT-817 driver decodes them from the wrong part of the radio's reply. Panel flags (AGC, NB and so on) aren't available through Hamlib either.
+Then choose "Hamlib rigctld" in Settings (default 127.0.0.1:4532) and set WSJT-X to "Hamlib NET rigctl". This mode shows frequency, mode, VFO, split, S-meter, PTT and approximate TX meters. Panel flags (AGC, NB and so on) aren't available through Hamlib.
 
 **Demo.** A built-in simulated FT-817 that cycles through FT8 on 20 m, CW on 40 m and FM on 2 m. You can also start the app with the `--demo` argument (on Linux: `ft817-monitor --demo`).
 
@@ -59,7 +59,7 @@ Power output always works. SWR, ALC and MOD need the undocumented command `0xBD`
 
 Why it's optional: `0xBE`, one value away, is the factory reset, which erases the radio's calibration. The app cannot send `0xBE` (it is blocked in code and covered by a unit test), but a noisy cable could in theory corrupt a byte in transit. With a decent cable the risk is very low, and hardware displays have used `0xBD` for years.
 
-Published sources disagree on how the `0xBD` reply is packed. The default layout was checked on a real FT-817ND; the published alternatives are kept in Settings → "Reply layout" for other radios.
+Published sources disagree on how the `0xBD` reply is packed. The app uses the layout that matched the radio's own SWR, ALC and MOD meters on a real FT-817ND. It hasn't been checked on an FT-818; if your meters don't match the radio's, please report it.
 
 # 817 EEPROM
 

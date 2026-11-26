@@ -5,7 +5,6 @@
 //!   cargo run --example cli_monitor -- rigctld 127.0.0.1 4532
 //!   cargo run --example cli_monitor -- demo
 
-use ft817_monitor_lib::cat::MeterMap;
 use ft817_monitor_lib::poller::{run, MonitorConfig, Source};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
@@ -23,7 +22,7 @@ fn main() {
         },
         _ => Source::Demo,
     };
-    let cfg = MonitorConfig { source, read_tx_meters: a.iter().any(|x| x == "--bd"), meter_map: MeterMap::Tested };
+    let cfg = MonitorConfig { source, read_tx_meters: a.iter().any(|x| x == "--bd") };
     run(cfg, Arc::new(AtomicBool::new(false)), |st| {
         println!("{}", serde_json::to_string(st).unwrap());
     });

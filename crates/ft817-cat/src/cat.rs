@@ -10,7 +10,7 @@
 //! Opcode 0xBE (factory reset, destroys calibration) and 0xBC (EEPROM write)
 //! can never be produced.
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::fmt;
 
 pub const OP_READ_FREQ_MODE: u8 = 0x03;
@@ -155,6 +155,10 @@ pub fn decode_freq_mode(b: &[u8]) -> Result<FreqMode, CatError> {
         tens_of_hz = tens_of_hz * 100 + bcd(x)?;
     }
     let m = b[4];
+    // A real FT-817ND reports PKT as 0xFC (published sources say 0x0C).
+    if m == 0xFC {
+        return Ok(FreqMode { hz: tens_of_hz * 10, mode: Mode::Pkt, narrow: false });
+    }
     let mode = match m & 0x7F {
         0x00 => Mode::Lsb,
         0x01 => Mode::Usb,
@@ -167,7 +171,9 @@ pub fn decode_freq_mode(b: &[u8]) -> Result<FreqMode, CatError> {
         0x0C => Mode::Pkt,
         _ => Mode::Unknown(m),
     };
-    Ok(FreqMode { hz: tens_of_hz * 10, mode, narrow: m & 0x80 != 0 })
+    // Bit 7 is the narrow filter flag, meaningful only for known modes.
+    let narrow = m & 0x80 != 0 && !matches!(mode, Mode::Unknown(_));
+    Ok(FreqMode { hz: tens_of_hz * 10, mode, narrow })
 }
 
 pub fn mode_label(mode: Mode, narrow: bool, dig: Option<DigMode>) -> String {
@@ -244,23 +250,6 @@ pub fn decode_tx_status(b: u8) -> TxStatus {
 
 // ---------------------------------------------------------------- TX meters
 
-/// Published sources disagree on how the undocumented BD reply packs its
-/// four nibbles, so the layout is a user setting. All agree on PWR.
-/// `Tested` comes from a real FT-817ND (Nov 2026): byte 0 low nibble rose
-/// with no antenna connected (SWR); byte 1 low followed the voice (MOD);
-/// byte 1 high stayed at zero at normal drive (ALC).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum MeterMap {
-    /// Field-tested on an FT-817ND: byte0 = PWR|SWR, byte1 = ALC|MOD
-    #[default]
-    Tested,
-    /// KA7OEI: byte0 = PWR|SWR, byte1 = MOD|ALC
-    Ka7oei,
-    /// Hamlib-style: byte0 = PWR|ALC, byte1 = SWR|MOD
-    Alternate,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TxMeter {
     pub pwr: u8,
@@ -270,16 +259,17 @@ pub struct TxMeter {
 }
 
 /// Command BD. Returns None in receive (1-byte 0x00 reply).
-pub fn decode_tx_meter(b: &[u8], map: MeterMap) -> Option<TxMeter> {
+///
+/// Layout confirmed against the radio's own meters on a real FT-817ND
+/// (Nov 2026): byte 0 = PWR (high) | ALC (low), byte 1 = SWR (high) | MOD (low).
+/// Published sources disagree here; KA7OEI's layout (PWR|SWR, MOD|ALC) did
+/// not match the radio.
+pub fn decode_tx_meter(b: &[u8]) -> Option<TxMeter> {
     if b.len() < 2 {
         return None;
     }
     let (b0, b1) = (b[0], b[1]);
-    Some(match map {
-        MeterMap::Tested => TxMeter { pwr: b0 >> 4, swr: b0 & 0x0F, alc: b1 >> 4, modulation: b1 & 0x0F },
-        MeterMap::Ka7oei => TxMeter { pwr: b0 >> 4, swr: b0 & 0x0F, modulation: b1 >> 4, alc: b1 & 0x0F },
-        MeterMap::Alternate => TxMeter { pwr: b0 >> 4, alc: b0 & 0x0F, swr: b1 >> 4, modulation: b1 & 0x0F },
-    })
+    Some(TxMeter { pwr: b0 >> 4, alc: b0 & 0x0F, swr: b1 >> 4, modulation: b1 & 0x0F })
 }
 
 // ---------------------------------------------------------------- EEPROM flags
@@ -468,15 +458,31 @@ mod tests {
     }
 
     #[test]
-    fn tx_meter_maps() {
-        assert_eq!(decode_tx_meter(&[0x00], MeterMap::Ka7oei), None);
-        let m = decode_tx_meter(&[0xA2, 0x53], MeterMap::Ka7oei).unwrap();
-        assert_eq!((m.pwr, m.swr, m.modulation, m.alc), (10, 2, 5, 3));
-        let m = decode_tx_meter(&[0xA2, 0x53], MeterMap::Tested).unwrap();
-        assert_eq!((m.pwr, m.swr, m.alc, m.modulation), (10, 2, 5, 3));
-        assert_eq!(MeterMap::default(), MeterMap::Tested);
-        let m = decode_tx_meter(&[0xA2, 0x53], MeterMap::Alternate).unwrap();
-        assert_eq!((m.pwr, m.alc, m.swr, m.modulation), (10, 2, 5, 3));
+    fn pkt_reported_as_fc_and_unknown_modes_never_narrow() {
+        let f = decode_freq_mode(&[0x14, 0x51, 0x00, 0x00, 0xFC]).unwrap();
+        assert_eq!((f.mode, f.narrow), (Mode::Pkt, false));
+        assert_eq!(mode_label(f.mode, f.narrow, None), "PKT");
+        let f = decode_freq_mode(&[0x14, 0x51, 0x00, 0x00, 0x0C]).unwrap();
+        assert_eq!(f.mode, Mode::Pkt);
+        let f = decode_freq_mode(&[0x14, 0x51, 0x00, 0x00, 0xFE]).unwrap();
+        assert!(!f.narrow);
+        assert_eq!(mode_label(f.mode, f.narrow, None), "?FE");
+        let f = decode_freq_mode(&[0x14, 0x51, 0x00, 0x00, 0x88]).unwrap();
+        assert_eq!(mode_label(f.mode, f.narrow, None), "FM-N");
+    }
+
+    #[test]
+    fn tx_meter_layout_matches_real_ft817nd() {
+        assert_eq!(decode_tx_meter(&[0x00]), None);
+        // AM into the antenna: radio showed SWR 0, ALC full, MOD full.
+        let m = decode_tx_meter(&[0xF6, 0x05]).unwrap();
+        assert_eq!((m.pwr, m.alc, m.swr, m.modulation), (15, 6, 0, 5));
+        // Antenna disconnected: radio's SWR high.
+        let m = decode_tx_meter(&[0xF6, 0x55]).unwrap();
+        assert_eq!(m.swr, 5);
+        // AM carrier, no speech: radio's MOD at zero.
+        let m = decode_tx_meter(&[0xF6, 0x00]).unwrap();
+        assert_eq!(m.modulation, 0);
     }
 
     #[test]

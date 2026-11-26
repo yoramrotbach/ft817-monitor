@@ -1,7 +1,7 @@
 //! Polling loops. Each runs on its own thread until `stop` is set and pushes
 //! RigState snapshots to `emit` (throttled to ~30 updates per second).
 
-use crate::cat::{self, ee, DigMode, MeterMap, Mode};
+use crate::cat::{self, ee, DigMode, Mode};
 use crate::state::{Link, RigState};
 use crate::transport::{CatPort, DemoCat, SerialCat};
 use serde::Deserialize;
@@ -25,8 +25,6 @@ pub struct MonitorConfig {
     /// Use the undocumented BD command for SWR/ALC/MOD while transmitting.
     #[serde(default)]
     pub read_tx_meters: bool,
-    #[serde(default)]
-    pub meter_map: MeterMap,
 }
 
 const EMIT_EVERY: Duration = Duration::from_millis(33);
@@ -149,7 +147,7 @@ fn poll_fast(port: &mut Box<dyn CatPort>, st: &mut RigState, cfg: &MonitorConfig
         st.high_swr = Some(tx.high_swr);
         if cfg.read_tx_meters {
             let r = ask(port, cat::simple(cat::OP_READ_TX_METER).unwrap())?;
-            if let Some(m) = cat::decode_tx_meter(&r, cfg.meter_map) {
+            if let Some(m) = cat::decode_tx_meter(&r) {
                 st.swr = Some(m.swr);
                 st.alc = Some(m.alc);
                 st.modulation = Some(m.modulation);
@@ -327,6 +325,11 @@ fn hamlib_mode_label(m: &str) -> String {
     }
 }
 
+fn swr_to_scale(swr: f64) -> u8 {
+    // 1.0 -> 0, 3.0 or worse -> 15
+    (((swr - 1.0) / 2.0).clamp(0.0, 1.0) * 15.0).round() as u8
+}
+
 fn to_scale(v: f64) -> u8 {
     (v.clamp(0.0, 1.0) * 15.0).round() as u8
 }
@@ -358,10 +361,8 @@ fn run_rigctld(host: &str, port: u16, stop: &AtomicBool, emit: &impl Fn(&RigStat
                 st.tx = rc.num("t")?.map(|v| v != 0.0).unwrap_or(false);
                 if st.tx {
                     st.po = rc.num("l RFPOWER_METER")?.map(to_scale);
-                    // Hamlib's FT-817 backend decodes SWR and ALC from the wrong
-                    // nibbles (checked on a real FT-817ND), so they're not shown.
-                    st.swr = None;
-                    st.alc = None;
+                    st.swr = rc.num("l SWR")?.map(swr_to_scale);
+                    st.alc = rc.num("l ALC")?.map(to_scale);
                     st.modulation = None;
                 } else {
                     if let Some(raw) = rc.num("l RAWSTR")? {
@@ -417,7 +418,7 @@ mod tests {
         let seen: Arc<Mutex<Vec<RigState>>> = Arc::default();
         let (s2, seen2) = (stop.clone(), seen.clone());
         let h = std::thread::spawn(move || {
-            let cfg = MonitorConfig { source: Source::Demo, read_tx_meters: true, meter_map: MeterMap::Tested };
+            let cfg = MonitorConfig { source: Source::Demo, read_tx_meters: true };
             run(cfg, s2, |st| seen2.lock().unwrap().push(st.clone()));
         });
         std::thread::sleep(Duration::from_millis(1500));
@@ -446,7 +447,6 @@ mod tests {
             let cfg = MonitorConfig {
                 source: Source::Serial { port: "/nonexistent/port".into(), baud: 38400 },
                 read_tx_meters: false,
-                meter_map: MeterMap::Tested,
             };
             run(cfg, s2, |st| seen2.lock().unwrap().push(st.clone()));
         });

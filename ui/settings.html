@@ -45,15 +45,6 @@
       <legend>Transmit meters</legend>
       <label class="check"><input type="checkbox" id="read-bd" /> Read SWR, ALC and MOD while transmitting</label>
       <p class="hint warn">Uses the undocumented command 0xBD. Its neighbor 0xBE is the factory reset, which erases calibration. This app only ever sends read commands, but leave this off if your cable is unreliable. Power output works either way.</p>
-      <div class="field">
-        <label for="meter-map">Reply layout</label>
-        <select id="meter-map">
-          <option value="tested">Tested on FT-817ND (PWR|SWR, ALC|MOD)</option>
-          <option value="ka7oei">KA7OEI (PWR|SWR, MOD|ALC)</option>
-          <option value="alternate">Hamlib (PWR|ALC, SWR|MOD)</option>
-        </select>
-      </div>
-      <p class="hint">Published sources disagree on this layout. The default was checked on a real FT-817ND; the others are kept for other radios.</p>
     </fieldset>
 
     <fieldset>

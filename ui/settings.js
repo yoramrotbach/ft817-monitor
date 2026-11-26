@@ -9,7 +9,7 @@
 
   // Settings that change how the app talks to the radio. Changing any of
   // these restarts the connection when the window is closed.
-  const CONNECTION_KEYS = new Set(["kind", "port", "baud", "host", "tcpPort", "readBd", "meterMap"]);
+  const CONNECTION_KEYS = new Set(["kind", "port", "baud", "host", "tcpPort", "readBd"]);
 
   function send(key) {
     if (CONNECTION_KEYS.has(key)) {
@@ -52,7 +52,6 @@
     $("host").value = cfg.host;
     $("tcp-port").value = cfg.tcpPort;
     $("read-bd").checked = cfg.readBd;
-    $("meter-map").value = cfg.meterMap;
     $("theme").value = cfg.theme;
     $("on-top").checked = cfg.onTop;
   }
@@ -73,7 +72,6 @@
     bind("host", "host", "input");
     bind("tcp-port", "tcpPort", "input", Number);
     bind("read-bd", "readBd");
-    bind("meter-map", "meterMap");
     bind("theme", "theme");     // applied live in the display window
     bind("on-top", "onTop");    // applied live in the display window
     $("refresh-ports").addEventListener("click", refreshPorts);

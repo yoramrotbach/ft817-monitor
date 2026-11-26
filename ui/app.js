@@ -10,12 +10,12 @@
   // ------------------------------------------------------------ settings
   const DEFAULTS = {
     kind: "serial", port: "", baud: "38400", host: "127.0.0.1", tcpPort: 4532,
-    readBd: false, meterMap: "tested", theme: "radio", onTop: false, autoConnect: false,
+    readBd: false, theme: "radio", onTop: false, autoConnect: false,
   };
   let cfg = { ...DEFAULTS };
   try { cfg = { ...DEFAULTS, ...JSON.parse(localStorage.getItem("ft817mon") || "{}") }; } catch (_) {}
-  // v2: the field-tested meter layout became the default (Nov 2026).
-  if (cfg.meterMapV !== 2) { cfg.meterMap = "tested"; cfg.meterMapV = 2; }
+  // The meter layout is fixed now; drop the old setting.
+  delete cfg.meterMap; delete cfg.meterMapV;
   const save = () => { try { localStorage.setItem("ft817mon", JSON.stringify(cfg)); } catch (_) {} };
 
   // ------------------------------------------------------------ meters
@@ -157,7 +157,7 @@
       : cfg.kind === "rigctld"
         ? { kind: "rigctld", host: cfg.host, port: Number(cfg.tcpPort) }
         : { kind: "demo" };
-    return { source, read_tx_meters: cfg.readBd, meter_map: cfg.meterMap };
+    return { source, read_tx_meters: cfg.readBd };
   }
 
   async function connect() {

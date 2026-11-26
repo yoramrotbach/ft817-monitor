@@ -21,21 +21,19 @@ Sources:
 
 ## Decoding
 
-**`03` frequency/mode.** Bytes 0–3 are packed BCD, MSB first, in 10 Hz units (`01 40 74 00` = 14.074.00 MHz). Byte 4 is the mode: `00` LSB, `01` USB, `02` CW, `03` CWR, `04` AM, `06` WFM, `08` FM, `0A` DIG, `0C` PKT. Bit 7 set means narrow (for example `82` = CW-N, `88` = FM-N).
+**`03` frequency/mode.** Bytes 0–3 are packed BCD, MSB first, in 10 Hz units (`01 40 74 00` = 14.074.00 MHz). Byte 4 is the mode: `00` LSB, `01` USB, `02` CW, `03` CWR, `04` AM, `06` WFM, `08` FM, `0A` DIG, `0C` PKT. Bit 7 set means narrow (for example `82` = CW-N, `88` = FM-N). **A real FT-817ND reports PKT as `FC`**, which the published sources don't mention; the app treats both `0C` and `FC` as PKT, and shows any other unknown value as `?xx` without a narrow flag.
 
 **`F7` TX status.** The radio answers `FF` in receive; Hamlib uses this to detect PTT, and so does this app. In transmit: bits 0–3 = power output (0–15), bit 6 = high SWR. Bit 5 (split) is **not used**: [K] notes reports that bits 5 and 7 may be swapped. Split comes from EEPROM `7A` instead.
 
 **`E7` RX status** (valid in receive only). Bits 0–3 = S-meter (0–9 = S0–S9, 10 = S9+10 dB … 15 = S9+60 dB); bit 5 = FM discriminator off-center; bit 6 = CTCSS/DCS enabled but not matched; bit 7 = squelched.
 
-**`BD` TX meters.** Two bytes, four nibbles. All sources agree that the high nibble of byte 0 is PWR. They disagree on the rest:
+**`BD` TX meters.** Two bytes, four nibbles. Published sources disagree on the layout. The app uses the one that matched the radio's own meters on a real FT-817ND:
 
-| Layout | byte 0 low | byte 1 high | byte 1 low |
+| byte 0 high | byte 0 low | byte 1 high | byte 1 low |
 |---|---|---|---|
-| **Tested on FT-817ND (default)** | SWR | ALC | MOD |
-| KA7OEI | SWR | MOD | ALC |
-| Hamlib | ALC | SWR | MOD |
+| PWR | ALC | SWR | MOD |
 
-Field test on a real FT-817ND (Nov 2026): with the antenna disconnected, byte 0 low rose sharply, so it is SWR (as KA7OEI says). In SSB, byte 1 low followed the voice (MOD), and byte 1 high stayed at zero at normal mic gain (ALC, which only rises when the transmitter is driven hard). Note that the FT-817 "SWR" reading is closer to reflected power, so it also moves with the voice in SSB. Hamlib's code reads MOD and SWR from the same nibble and reads ALC from the nibble that is actually SWR, so TX meters through rigctld are unreliable. Not tested: the FT-818.
+Field test (Nov 2026, direct serial, radio's METER switched between SWR, ALC and MOD for comparison): in AM into the antenna the radio showed SWR 0, ALC full and MOD full, and the reply nibbles were SWR 0, ALC 6, MOD 5. With the antenna disconnected, SWR rose to 5–7, as on the radio. Keyed in AM without speaking, MOD dropped to 0, as on the radio. KA7OEI's layout (PWR|SWR, MOD|ALC) did not match. Hamlib's decoding of SWR and ALC matches; its MOD reads the wrong nibble, but Hamlib doesn't report MOD. Not tested: the FT-818.
 
 **`BB` EEPROM** (address in bytes 0–1). The app uses only the first returned byte, as Hamlib does.
 
