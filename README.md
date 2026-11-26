@@ -9,7 +9,7 @@ Two free desktop apps for the **Yaesu FT-817, FT-817ND and FT-818**, for Windows
 
 They are separate apps on purpose: the monitor contains no code that can write to the radio.
 
-> **Tested radios.** Both apps have been tested on real hardware with two **FT-817ND** radios only. They have **not** been tested on the original **FT-817** or on the **FT-818ND**. Support for those models is based on published documentation, not on testing. If you own one, please test with care and report what you find.
+> **Tested radios.** Both apps have been tested on real hardware with two **FT-817ND** radios only. They have **not** been tested on the original **FT-817** or on the **FT-818** (sold as FT-818ND). Support for those models is based on published documentation, not on testing. If you own one, please test with care and report what you find.
 
 # 817 Monitor
 
@@ -75,7 +75,7 @@ The FT-817's EEPROM holds everything the radio knows about itself, including the
 
 | Safeguard | Why |
 |---|---|
-| Addresses 0x00–0x05 are never written | 0–3 are an integrity checksum; changing them can make the radio wipe its EEPROM. 4–5 identify the hardware version. |
+| Addresses 0x00–0x05 are never written | 0–3 hold a fixed marker (`A5 5A A5 5A` on both radios tested). Published sources call these bytes a checksum and warn that changing them can make the radio wipe its EEPROM, so the app never touches them. 4–5 identify the hardware version. |
 | Refuses a backup whose version bytes differ from the radio's | Stops a restore from another model or variant. |
 | Warns when the backup is most likely from **another radio**: more than 8 of the 76 calibration values differ from the radio's | A radio's own backup normally matches its calibration exactly. Two FT-817NDs compared in testing differed in 64 of 76 values. To go ahead anyway you must type DIFFERENT RADIO. |
 | A fresh backup of the radio is saved before anything is written | Every restore can be undone. |

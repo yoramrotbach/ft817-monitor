@@ -2,8 +2,9 @@
 //!
 //! This module is the ONLY code in the project that can write to a radio.
 //! Safety rules, all enforced here and covered by tests:
-//!   1. Addresses 0x00-0x05 are never written (0-3 = integrity checksum whose
-//!      change can wipe the whole EEPROM; 4-5 = radio version bytes).
+//!   1. Addresses 0x00-0x05 are never written (0-3 = a fixed A5 5A A5 5A marker
+//!      on the FT-817NDs tested, described elsewhere as a checksum whose change
+//!      can wipe the whole EEPROM; 4-5 = radio version bytes).
 //!   2. Restore is refused if the backup's version bytes differ from the radio's.
 //!   3. Backups are read twice; unstable bytes are re-read until consistent.
 //!   4. Only bytes that differ are written, each one read back and verified.

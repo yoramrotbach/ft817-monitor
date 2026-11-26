@@ -3,7 +3,8 @@
 //!
 //! Used by Demo modes, by the `sim_serial` example (a virtual radio on a serial
 //! port / pty) and by tests. It also mimics the dangerous behavior documented by
-//! KA7OEI: changing EEPROM bytes 0-3 (integrity checksum) wipes the EEPROM.
+//! KA7OEI: changing EEPROM bytes 0-3 (described as an integrity checksum;
+//! a fixed A5 5A A5 5A on real FT-817NDs) wipes the EEPROM.
 //!
 //! Animated scenario (monitor demo), repeating every 60 s:
 //!   0-30 s  14.074 MHz DIG USER-U, FT8-style: TX in alternate 15 s slots
@@ -60,7 +61,7 @@ fn default_image() -> Vec<u8> {
         // Deterministic filler standing in for VFOs and memories.
         *b = ((a as u32).wrapping_mul(37) ^ 0x5A) as u8;
     }
-    ee[0..4].copy_from_slice(&[0x1B, 0x2C, 0x3D, 0x4E]); // integrity "checksum"
+    ee[0..4].copy_from_slice(&[0xA5, 0x5A, 0xA5, 0x5A]); // fixed marker, as on real FT-817NDs
     ee[4] = 0xD8; // radio version (KA7OEI example values)
     ee[5] = 0xBF;
     ee[6] = 0x00;
