@@ -293,6 +293,26 @@ impl Rigctld {
     /// reported an error for this command (e.g. not supported).
     fn cmd(&mut self, c: &str, lines: usize) -> io::Result<Option<Vec<String>>> {
         self.w.write_all(format!("{c}\n").as_bytes())?;
+        self.read_reply(lines)
+    }
+
+    /// Send several commands in one write, then read each reply in order.
+    /// Saves a network round trip per command. Each entry: (command, reply lines).
+    fn batch(&mut self, cmds: &[(&str, usize)]) -> io::Result<Vec<Option<Vec<String>>>> {
+        let mut req = String::new();
+        for (c, _) in cmds {
+            req.push_str(c);
+            req.push('\n');
+        }
+        self.w.write_all(req.as_bytes())?;
+        let mut replies = Vec::with_capacity(cmds.len());
+        for &(_, lines) in cmds {
+            replies.push(self.read_reply(lines)?);
+        }
+        Ok(replies)
+    }
+
+    fn read_reply(&mut self, lines: usize) -> io::Result<Option<Vec<String>>> {
         let mut out = Vec::with_capacity(lines);
         for _ in 0..lines {
             let mut l = String::new();
@@ -301,37 +321,74 @@ impl Rigctld {
             }
             let l = l.trim().to_string();
             if l.starts_with("RPRT") {
-                return Ok(None);
+                return Ok(None); // error reply is a single line
             }
             out.push(l);
         }
         Ok(Some(out))
     }
+}
 
-    fn num(&mut self, c: &str) -> io::Result<Option<f64>> {
-        Ok(self.cmd(c, 1)?.and_then(|v| v[0].parse::<f64>().ok()))
+fn reply_num(r: &Option<Vec<String>>) -> Option<f64> {
+    r.as_ref().and_then(|v| v.first()).and_then(|x| x.parse::<f64>().ok())
+}
+
+// Hamlib's FT-817 driver converts the radio's raw 0-15 meter values with
+// these tables (rigs/yaesu/ft817.c). Reversing them gives back the raw
+// value, so rigctld bars use the same scale as direct mode.
+const HL_PWR_W: [f64; 9] = [0.0, 0.5, 0.75, 1.0, 1.7, 2.5, 3.3, 4.1, 5.0];
+const HL_SWR: [f64; 11] = [1.0, 1.4, 1.8, 2.13, 2.25, 3.7, 6.0, 7.0, 8.0, 9.0, 10.0];
+
+/// Nearest raw index for a value from a monotonic Hamlib calibration table.
+fn raw_from_table(v: f64, table: &[f64]) -> u8 {
+    let mut best = 0usize;
+    for (i, t) in table.iter().enumerate() {
+        if (v - t).abs() < (v - table[best]).abs() {
+            best = i;
+        }
+    }
+    best as u8
+}
+
+/// Hamlib ALC table: raw 0-5 -> 0, 20, ... 100. Raw values above 5 read as 100.
+fn raw_alc(v: f64) -> u8 {
+    (v / 20.0).round().clamp(0.0, 5.0) as u8
+}
+
+/// Hamlib's normal filter width per mode (ft817.c filter list). A narrower
+/// width reported by `m` means the radio's narrow filter is on.
+fn hamlib_normal_width(mode: &str) -> i64 {
+    match mode {
+        "AM" => 6000,
+        "FM" | "PKTFM" | "" | "None" | "NONE" => 9000,
+        "WFM" => 15000,
+        _ => 2200,
     }
 }
 
-fn hamlib_mode_label(m: &str) -> String {
-    match m {
-        "PKTUSB" => "DIG USER-U".into(),
-        "PKTLSB" => "DIG USER-L".into(),
-        "RTTYR" | "RTTY" => "DIG RTTY".into(),
-        "PSK" => "DIG PSK-U".into(),
-        "PSKR" => "DIG PSK-L".into(),
-        "PKTFM" => "PKT".into(),
-        other => other.into(),
-    }
-}
-
-fn swr_to_scale(swr: f64) -> u8 {
-    // 1.0 -> 0, 3.0 or worse -> 15
-    (((swr - 1.0) / 2.0).clamp(0.0, 1.0) * 15.0).round() as u8
-}
-
-fn to_scale(v: f64) -> u8 {
-    (v.clamp(0.0, 1.0) * 15.0).round() as u8
+/// Map Hamlib's mode name and passband to the same label direct mode shows.
+fn hamlib_mode_label(m: &str, width_hz: Option<i64>) -> String {
+    use cat::{DigMode as D, Mode as M};
+    let (mode, dig) = match m {
+        "LSB" => (M::Lsb, None),
+        "USB" => (M::Usb, None),
+        "CW" => (M::Cw, None),
+        "CWR" => (M::Cwr, None),
+        "AM" => (M::Am, None),
+        "FM" => (M::Fm, None),
+        "WFM" => (M::Wfm, None),
+        // Hamlib doesn't recognize the FT-817ND's PKT code (0xFC) and reports
+        // no mode; on this radio that only happens in PKT.
+        "PKTFM" | "" | "None" | "NONE" => (M::Pkt, None),
+        "PKTUSB" => (M::Dig, Some(D::UserU)),
+        "PKTLSB" => (M::Dig, Some(D::UserL)),
+        "RTTYR" | "RTTY" => (M::Dig, Some(D::Rtty)),
+        "PSK" => (M::Dig, Some(D::PskU)),
+        "PSKR" => (M::Dig, Some(D::PskL)),
+        other => return other.to_string(),
+    };
+    let narrow = matches!(width_hz, Some(w) if w > 0 && w < hamlib_normal_width(m));
+    cat::mode_label(mode, narrow, dig)
 }
 
 fn run_rigctld(host: &str, port: u16, stop: &AtomicBool, emit: &impl Fn(&RigState)) {
@@ -349,29 +406,45 @@ fn run_rigctld(host: &str, port: u16, stop: &AtomicBool, emit: &impl Fn(&RigStat
         let mut last_slow = Instant::now() - Duration::from_secs(10);
 
         let result: io::Result<()> = (|| {
+            let mut last_mode = Instant::now() - Duration::from_secs(10);
+            let mut pwr_cmd = "l RFPOWER_METER_WATTS";
             while !stop.load(Ordering::Relaxed) {
-                if let Some(f) = rc.num("f")? {
+                // Every cycle: frequency and PTT, sent together.
+                let r = rc.batch(&[("f", 1), ("t", 1)])?;
+                if let Some(f) = reply_num(&r[0]) {
                     let hz = f as u64;
                     st.freq_hz = Some(hz);
                     st.band = Some(cat::band_name(hz).into());
                 }
-                if let Some(v) = rc.cmd("m", 2)? {
-                    st.mode = Some(hamlib_mode_label(&v[0]));
-                }
-                st.tx = rc.num("t")?.map(|v| v != 0.0).unwrap_or(false);
+                st.tx = reply_num(&r[1]).map(|v| v != 0.0).unwrap_or(false);
                 if st.tx {
-                    st.po = rc.num("l RFPOWER_METER")?.map(to_scale);
-                    st.swr = rc.num("l SWR")?.map(swr_to_scale);
-                    st.alc = rc.num("l ALC")?.map(to_scale);
-                    st.modulation = None;
+                    let r = rc.batch(&[(pwr_cmd, 1), ("l SWR", 1), ("l ALC", 1)])?;
+                    if r[0].is_none() && pwr_cmd == "l RFPOWER_METER_WATTS" {
+                        pwr_cmd = "l RFPOWER"; // Hamlib before 4.6; same table in the FT-817 driver
+                    }
+                    st.po = reply_num(&r[0]).map(|w| raw_from_table(w, &HL_PWR_W));
+                    st.swr = reply_num(&r[1]).map(|v| raw_from_table(v, &HL_SWR));
+                    st.alc = reply_num(&r[2]).map(raw_alc);
+                    st.modulation = None; // Hamlib doesn't report MOD
                 } else {
-                    if let Some(raw) = rc.num("l RAWSTR")? {
+                    let r = rc.batch(&[("l RAWSTR", 1), ("\\get_dcd", 1)])?;
+                    if let Some(raw) = reply_num(&r[0]) {
                         let s = raw.clamp(0.0, 15.0) as u8;
                         st.s_raw = Some(s);
                         st.s_label = Some(cat::s_label(s));
                     }
-                    st.squelched = rc.num("\\get_dcd")?.map(|v| v == 0.0);
+                    st.squelched = reply_num(&r[1]).map(|v| v == 0.0);
                     st.po = Some(0);
+                    st.swr = None;
+                    st.alc = None;
+                }
+                // About 3 times a second: mode and filter width.
+                if last_mode.elapsed() >= Duration::from_millis(330) {
+                    if let Some(v) = rc.cmd("m", 2)? {
+                        let width = v.get(1).and_then(|w| w.parse::<i64>().ok());
+                        st.mode = Some(hamlib_mode_label(&v[0], width));
+                    }
+                    last_mode = Instant::now();
                 }
                 if last_slow.elapsed() >= Duration::from_secs(1) {
                     if let Some(v) = rc.cmd("v", 1)? {
@@ -392,8 +465,8 @@ fn run_rigctld(host: &str, port: u16, stop: &AtomicBool, emit: &impl Fn(&RigStat
                 }
                 st.polls_per_sec = rate.tick();
                 emit(&st);
-                // Be gentle: other programs share this radio.
-                std::thread::sleep(Duration::from_millis(100));
+                // No fixed pause: each request already waits for the radio.
+                std::thread::sleep(Duration::from_millis(5));
             }
             Ok(())
         })();
@@ -462,4 +535,59 @@ mod tests {
         assert!(second.error.as_deref().unwrap_or("").contains("Cannot open the serial port"));
         assert!(second.message.contains("attempt 2"));
     }
+
+    #[test]
+    fn hamlib_meter_values_map_back_to_raw() {
+        assert_eq!(raw_from_table(0.0, &HL_PWR_W), 0);
+        assert_eq!(raw_from_table(2.5, &HL_PWR_W), 5);
+        assert_eq!(raw_from_table(5.0, &HL_PWR_W), 8);
+        assert_eq!(raw_from_table(1.0, &HL_SWR), 0);
+        assert_eq!(raw_from_table(3.7, &HL_SWR), 5);
+        assert_eq!(raw_from_table(10.0, &HL_SWR), 10);
+        assert_eq!(raw_alc(0.0), 0);
+        assert_eq!(raw_alc(60.0), 3);
+        assert_eq!(raw_alc(100.0), 5);
+    }
+
+    #[test]
+    fn hamlib_modes_and_narrow() {
+        assert_eq!(hamlib_mode_label("USB", Some(2200)), "USB");
+        assert_eq!(hamlib_mode_label("CW", Some(500)), "CW-N");
+        assert_eq!(hamlib_mode_label("FM", Some(9000)), "FM");
+        assert_eq!(hamlib_mode_label("FM", Some(6250)), "FM-N");
+        assert_eq!(hamlib_mode_label("PKTUSB", Some(2200)), "DIG USER-U");
+        assert_eq!(hamlib_mode_label("RTTYR", Some(500)), "DIG-N RTTY");
+        // FT-817ND PKT: Hamlib reports no mode.
+        assert_eq!(hamlib_mode_label("", Some(9000)), "PKT");
+        assert_eq!(hamlib_mode_label("None", None), "PKT");
+        assert_eq!(hamlib_mode_label("PKTFM", Some(9000)), "PKT");
+    }
+
+    #[test]
+    fn rigctld_batch_reads_replies_in_order() {
+        use std::io::{BufRead, BufReader, Write};
+        use std::net::TcpListener;
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            let (s, _) = l.accept().unwrap();
+            let mut w = s.try_clone().unwrap();
+            for line in BufReader::new(s).lines() {
+                let reply = match line.unwrap().as_str() {
+                    "f" => "14074000\n",
+                    "t" => "0\n",
+                    "m" => "USB\n2200\n",
+                    _ => "RPRT -11\n",
+                };
+                w.write_all(reply.as_bytes()).unwrap();
+            }
+        });
+        let mut rc = Rigctld::connect("127.0.0.1", port).unwrap();
+        let r = rc.batch(&[("f", 1), ("bogus", 1), ("m", 2), ("t", 1)]).unwrap();
+        assert_eq!(reply_num(&r[0]), Some(14074000.0));
+        assert!(r[1].is_none());
+        assert_eq!(r[2].as_ref().unwrap(), &vec!["USB".to_string(), "2200".to_string()]);
+        assert_eq!(reply_num(&r[3]), Some(0.0));
+    }
+
 }

@@ -49,7 +49,13 @@ rigctld -m 1020 -r COM3 -s 38400      # FT-817 / FT-817ND
 rigctld -m 1041 -r /dev/ttyUSB0 -s 38400   # FT-818
 ```
 
-Then choose "Hamlib rigctld" in Settings (default 127.0.0.1:4532) and set WSJT-X to "Hamlib NET rigctl". This mode shows frequency, mode, VFO, split, S-meter, PTT and approximate TX meters. Panel flags (AGC, NB and so on) aren't available through Hamlib.
+Then choose "Hamlib rigctld" in Settings (default 127.0.0.1:4532) and set WSJT-X to "Hamlib NET rigctl". This mode shows frequency, mode (including narrow), VFO, split, S-meter, PTT, power, SWR and ALC. It's a basic mode with limits that come from Hamlib:
+
+- Updates are slower than direct serial, because every reading goes through Hamlib's FT-817 driver.
+- MOD and the panel flags (AGC, NB, LOCK and so on) aren't available.
+- ALC above about a third of the scale reads as full, because Hamlib's ALC scale stops there.
+- Hamlib doesn't recognize the FT-817ND's PKT mode code and reports no mode; the app shows that as PKT.
+- Meter scaling assumes Hamlib 4.6 or newer.
 
 **Demo.** A built-in simulated FT-817 that cycles through FT8 on 20 m, CW on 40 m and FM on 2 m. You can also start the app with the `--demo` argument (on Linux: `ft817-monitor --demo`).
 
