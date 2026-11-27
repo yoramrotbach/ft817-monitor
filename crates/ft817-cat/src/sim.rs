@@ -70,7 +70,7 @@ fn default_image() -> Vec<u8> {
     }
     ee[0x53] = 0x8E; // VCC calibration
     ee[ee::VFO_STATE as usize] = 0x80; // VFO A
-    ee[ee::PANEL_1 as usize] = 0x21; // AGC FAST, NB on
+    ee[ee::PANEL_1 as usize] = 0x61; // AGC FAST, NB on, LOCK off (bit 6 = 1 means unlocked)
     ee[ee::PANEL_2 as usize] = 0x00;
     ee[ee::DISPLAY as usize] = 0x10; // amber
     ee[0x64] = 0x80 | 0x05; // CAT rate 38400 (bits 7-6 = 10) + other bits
@@ -180,7 +180,7 @@ impl SimRadio {
         if self.animate {
             // Live panel state for the monitor demo.
             match a as u16 {
-                ee::PANEL_1 => return 0x20 | s.agc_bits,
+                ee::PANEL_1 => return 0x60 | s.agc_bits, // NB on, LOCK off
                 ee::PANEL_2 => return if s.hz < 10_000_000 { 0x30 } else { 0x00 },
                 _ => {}
             }

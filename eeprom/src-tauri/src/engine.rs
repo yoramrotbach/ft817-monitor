@@ -39,7 +39,7 @@ pub enum EeError {
     Read { addr: usize, detail: String },
     Cancelled,
     Transmitting,
-    DialLocked,
+    DialLocked(Vec<u8>),
     Protected(u16),
     Unstable(Vec<usize>),
     LengthMismatch { radio: usize, backup: usize },
@@ -56,7 +56,10 @@ impl fmt::Display for EeError {
             EeError::Read { addr, detail } => write!(f, "No reliable reply from the radio when reading EEPROM address 0x{addr:04X} ({detail}). Check the cable, power and baud rate."),
             EeError::Cancelled => write!(f, "Cancelled."),
             EeError::Transmitting => write!(f, "The radio is transmitting. Put it in receive and try again."),
-            EeError::DialLocked => write!(f, "The radio's dial LOCK is on. The FT-817 can stop answering CAT commands while locked; turn LOCK off and try again."),
+            EeError::DialLocked(raw) => {
+                let hex: Vec<String> = raw.iter().map(|b| format!("{b:02X}")).collect();
+                write!(f, "The radio's dial LOCK is on (the key symbol is showing). Turn LOCK off and try again. [0x57 read as {}]", hex.join(", "))
+            }
             EeError::Protected(a) => write!(f, "Refused to write protected address 0x{a:04X}."),
             EeError::Unstable(v) => write!(f, "{} EEPROM bytes read differently on repeated reads (first at 0x{:04X}). Leave the radio untouched and try again.", v.len(), v.first().copied().unwrap_or(0)),
             EeError::LengthMismatch { radio, backup } => write!(f, "The backup is {backup} bytes but this radio's EEPROM is {radio} bytes. It belongs to a different model."),
@@ -167,15 +170,17 @@ pub fn preflight(port: &mut dyn CatPort) -> Result<(), EeError> {
         });
     }
     let mut locked_votes = 0;
+    let mut raw = Vec::new();
     for _ in 0..3 {
         if let Pair::Data([p57, _]) = read_pair(port, ee::PANEL_1 as usize)? {
-            if p57 & 0x40 != 0 {
+            raw.push(p57);
+            if cat::decode_panel(p57, 0).lock {
                 locked_votes += 1;
             }
         }
     }
     if locked_votes >= 2 {
-        return Err(EeError::DialLocked);
+        return Err(EeError::DialLocked(raw));
     }
     Ok(())
 }
@@ -638,8 +643,8 @@ mod tests {
     #[test]
     fn preflight_refuses_locked_radio() {
         let (r, mut port) = rig(0);
-        r.lock().unwrap().ee[0x57] |= 0x40;
-        assert!(matches!(run(&mut port, |c| backup(c)), Err(EeError::DialLocked)));
+        r.lock().unwrap().ee[0x57] = 0x80; // as read from real FT-817NDs with LOCK on
+        assert!(matches!(run(&mut port, |c| backup(c)), Err(EeError::DialLocked(_))));
     }
 
     #[test]

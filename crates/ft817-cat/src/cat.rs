@@ -318,7 +318,9 @@ pub fn decode_panel(p57: u8, p58: u8) -> Panel {
         dsp: p57 & 0x04 != 0,
         pbt: p57 & 0x10 != 0,
         nb: p57 & 0x20 != 0,
-        lock: p57 & 0x40 != 0,
+        // Real FT-817NDs (two units, Nov 2026) report bit 6 = 0 when the dial
+        // LOCK is on, the opposite of KA7OEI's map.
+        lock: p57 & 0x40 == 0,
         fst: p57 & 0x80 != 0,
         meter_mode: ["PWR", "ALC", "SWR", "MOD"][(p58 & 0x03) as usize].to_string(),
         kyr: p58 & 0x10 != 0,
@@ -491,7 +493,7 @@ mod tests {
         assert_eq!(decode_vfo_state(0x81).label, "VFO B");
         assert_eq!(decode_vfo_state(0x00).label, "MEM");
         assert_eq!(decode_vfo_state(0x90).label, "HOME");
-        let p = decode_panel(0b0110_0010, 0b1011_0011);
+        let p = decode_panel(0b0010_0010, 0b1011_0011);
         assert_eq!(p.agc, "SLOW");
         assert!(p.nb && p.lock && !p.dsp && !p.fst);
         assert_eq!(p.meter_mode, "MOD");
@@ -511,4 +513,11 @@ mod tests {
         assert_eq!(band_name(9_500_000), "GEN");
         assert_eq!(band_name(145_500_000), "2m");
     }
+    #[test]
+    fn lock_bit_matches_real_ft817nd() {
+        // Both field backups were taken with LOCK on and read 0x57 = 0x80.
+        assert!(decode_panel(0x80, 0).lock);
+        assert!(!decode_panel(0xC0, 0).lock);
+    }
+
 }

@@ -40,7 +40,7 @@ Field test (Nov 2026, direct serial, radio's METER switched between SWR, ALC and
 | Addr | Bits | Meaning | Source |
 |---|---|---|---|
 | `55` | 0 VFO A/B · 1 MTQMB · 2 QMB · 4 HOME · 5 MTUNE · 7 VFO(1)/MEM(0) | VFO/memory state | K, H (bit 0) |
-| `57` | 1-0 AGC (Auto/Fast/Slow/Off) · 2 DSP · 4 PBT · 5 NB · 6 LOCK · 7 FST | panel | K |
+| `57` | 1-0 AGC (Auto/Fast/Slow/Off) · 2 DSP · 4 PBT · 5 NB · 6 LOCK · 7 FST. **On real FT-817NDs bit 6 is 0 when LOCK is on** (KA7OEI documents the opposite) | panel | K + field |
 | `58` | 1-0 meter mode (PWR/ALC/SWR/MOD) · 4 KYR · 5 BK · 6 VLT · 7 VOX | panel | K |
 | `5B` | 4 LCD color (0 blue, 1 amber) | display | K |
 | `65` | 7-5 DIG sub-mode (RTTY, PSK-L, PSK-U, USER-L, USER-U) | read only in DIG | K, H |
@@ -61,7 +61,7 @@ Field test (Nov 2026, direct serial, radio's METER switched between SWR, ALC and
 | 0x07–0x52 = soft-cal menu items 1–76 (address = item + 6); VCC calibration at 0x53; items 75–76 are signed | K | Shown by name in the app; counted as "calibration" in the restore summary |
 | 0x64 bits 7–6 = CAT rate (00 = 4800, 01 = 9600, 10 = 38400) | K | Kept at the radio's current value during a restore |
 | No checksum on the serial link; the radio can miss commands while busy | K | Two-pass reads with re-reads; every write read back, up to 3 tries; full read-back at the end |
-| The FT-817 may stop answering CAT while the dial is LOCKed | K | Restore and backup refuse to start while LOCK is on |
+| The FT-817 may stop answering CAT while the dial is LOCKed | K | Restore and backup refuse to start while LOCK is on, as a precaution. (The two FT-817NDs tested answered normally while locked.) |
 
 Region labels in the restore summary (calibration, settings, VFOs/home, memories) follow the FT-817 map and are approximate on the FT-818.
 
@@ -79,6 +79,8 @@ Two FT-817ND radios, both unmodified, bought from different owners:
 
 - Bytes 0x00–0x03 read `A5 5A A5 5A` on both radios, so they look like a fixed marker rather than a per-radio checksum. The app still never writes them.
 - Version bytes (0x04–0x05) differ between the two: `CE BF` and `D8 BF`.
+- The dial LOCK bit (0x57 bit 6) is reversed from KA7OEI's map on both radios: 0 = locked, 1 = unlocked.
+- In SSB, and at the moment of keying, the E7 tone and discriminator bits can be set; the app shows TONE? and OFF-FREQ only in FM, FM-N and PKT receive.
 - 64 of the 76 soft-calibration values differ between the two radios. This is the basis for the app's "most likely another radio" warning (threshold: more than 8 differing values).
 - The first radio tested did not answer an EEPROM read past 0x1925 with the single `00` byte described in published sources, so the app now reads exactly 0x0000–0x1925 and never asks past the end.
 

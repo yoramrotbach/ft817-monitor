@@ -171,10 +171,20 @@ fn poll_fast(port: &mut Box<dyn CatPort>, st: &mut RigState, cfg: &MonitorConfig
     st.band = Some(cat::band_name(fm.hz).to_string());
     let dig = if fm.mode == Mode::Dig { slow.dig } else { None };
     st.mode = Some(cat::mode_label(fm.mode, fm.narrow, dig));
+    if !fm_indicators_apply(st.tx, fm.mode) {
+        st.tone_mismatch = Some(false);
+        st.discr_off = Some(false);
+    }
     if let Some(b) = slow.ant_split {
         st.antenna = Some(cat::decode_antenna(b, fm.hz).to_string());
     }
     Ok(fm.mode)
+}
+
+/// TONE? and OFF-FREQ are FM receive indicators (FM, FM-N, PKT). In other
+/// modes and during transmit the bits are meaningless or stale.
+fn fm_indicators_apply(tx: bool, mode: Mode) -> bool {
+    !tx && matches!(mode, Mode::Fm | Mode::Pkt)
 }
 
 fn poll_slow(port: &mut Box<dyn CatPort>, st: &mut RigState, slow: &mut Slow, mode: Mode) -> io::Result<()> {
@@ -323,6 +333,15 @@ mod tests {
         let second = v.iter().find(|s| s.attempt == 2 && s.link == Link::Connecting).expect("second attempt");
         assert!(second.error.as_deref().unwrap_or("").contains("Cannot open the serial port"));
         assert!(second.message.contains("attempt 2"));
+    }
+
+    #[test]
+    fn fm_indicators_only_in_fm_receive() {
+        assert!(fm_indicators_apply(false, Mode::Fm));
+        assert!(fm_indicators_apply(false, Mode::Pkt));
+        assert!(!fm_indicators_apply(true, Mode::Fm));
+        assert!(!fm_indicators_apply(false, Mode::Usb));
+        assert!(!fm_indicators_apply(true, Mode::Usb));
     }
 
 }

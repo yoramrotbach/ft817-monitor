@@ -30,7 +30,7 @@ A desktop CAT monitor for the **Yaesu FT-817, FT-817ND and FT-818**. It shows wh
 | Frequency | 10 Hz resolution, radio-style `14.074.00` | same |
 | Meter | S-meter S1–S9+60 with peak hold | PO, plus SWR / ALC / MOD (optional, see below) |
 | Flags | AGC, NB, DSP, PBT, LOCK, FST, SPLIT, VOX, BK, KYR, antenna front/rear, power level | + HI-SWR alert |
-| Alerts | CTCSS/DCS mismatch (TONE?), FM off-frequency | |
+| Alerts (FM receive) | CTCSS/DCS mismatch (TONE?), FM off-frequency (OFF-FREQ) | Shown only in FM, FM-N and PKT while receiving |
 
 The LCD color follows the radio's own color setting (menu "Color": blue or amber), or you can pick amber, blue or a dark night mode.
 
@@ -74,7 +74,7 @@ The FT-817's EEPROM holds everything the radio knows about itself, including the
 | A fresh backup of the radio is saved before anything is written | Every restore can be undone. |
 | Only bytes that differ are written; each is read back, with retries | Usually a few dozen writes instead of thousands; stops if writes stop verifying. |
 | The radio's current CAT baud rate (0x64 bits 7–6) is kept | Restoring a different rate would cut the link halfway through. |
-| Radio must be in receive with the dial LOCK off | The FT-817 can stop answering CAT while locked. |
+| Radio must be in receive with the dial LOCK off | A precaution: published sources say the FT-817 can stop answering CAT while locked. |
 | A full read-back at the end | You see exactly which bytes, if any, don't match. |
 
 Restoring **calibration from another radio** onto yours would mis-calibrate it: each radio's values are its own. The app warns you when a backup looks like it came from another radio, but it can't be certain. If you own more than one radio, keep each radio's backups in its own folder and restore only that radio's backups.
