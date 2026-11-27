@@ -72,6 +72,8 @@ async fn stop_monitor(monitor: State<'_, Monitor>) -> Result<(), String> {
 
 pub fn run() {
     tauri::Builder::default()
+        // Reopen each window at the size and position it was closed at.
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .manage(Monitor::default())
         .invoke_handler(tauri::generate_handler![list_ports, start_monitor, stop_monitor, open_settings])
         .setup(|app| {

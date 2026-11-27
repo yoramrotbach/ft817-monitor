@@ -205,6 +205,36 @@
   render({ link: "stopped", source: "", message: "" });
   listen("rig-state", (e) => render(e.payload));
   if (TAURI && cfg.onTop) TAURI.window.getCurrentWindow().setAlwaysOnTop(true).catch(() => {});
+
+  // ------------------------------------------------------------ zoom
+  // Scale the fixed-size LCD uniformly to fill the space above the status bar.
+  const fitBox = $("lcd-fit");
+  const lcdEl = $("lcd");
+  function fitLcd() {
+    const css = getComputedStyle(document.documentElement);
+    const w = parseFloat(css.getPropertyValue("--lcd-w"));
+    const h = parseFloat(css.getPropertyValue("--lcd-h"));
+    const s = Math.min(fitBox.clientWidth / w, fitBox.clientHeight / h);
+    if (s > 0) lcdEl.style.transform = `scale(${s})`;
+  }
+  new ResizeObserver(fitLcd).observe(fitBox);
+  fitLcd();
+
+  // ------------------------------------------------------------ full screen
+  async function toggleFullscreen(force) {
+    if (!TAURI) return;
+    const w = TAURI.window.getCurrentWindow();
+    try {
+      const on = force ?? !(await w.isFullscreen());
+      await w.setFullscreen(on);
+    } catch (_) { /* not permitted or not supported */ }
+  }
+  lcdEl.addEventListener("dblclick", () => toggleFullscreen());
+  document.addEventListener("keydown", (e) => {
+    const macFull = e.key.toLowerCase() === "f" && e.metaKey && e.ctrlKey; // macOS convention
+    if (e.key === "F11" || macFull) { e.preventDefault(); toggleFullscreen(); }
+    else if (e.key === "Escape") toggleFullscreen(false);
+  });
   if (cfg.autoConnect) connect();
 
   // ------------------------------------------------------------ browser mock

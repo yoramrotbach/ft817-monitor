@@ -20,3 +20,4 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serialport = "4"
 ft817-cat = { path = "../crates/ft817-cat" }
+tauri-plugin-window-state = "2"

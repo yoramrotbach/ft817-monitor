@@ -50,10 +50,24 @@ body {
 }
 
 /* ---------------------------------------------------------------- LCD */
-.lcd {
-  position: relative;
+/* The LCD is laid out at one fixed design size (--lcd-w x --lcd-h) and then
+   scaled uniformly by app.js to fit the window, so text, meters and the
+   frequency all grow together. */
+:root { --lcd-w: 696px; --lcd-h: 328px; }
+.lcd-fit {
   flex: 1;
   min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.lcd {
+  position: relative;
+  flex: none;
+  width: var(--lcd-w);
+  height: var(--lcd-h);
+  transform-origin: center center;
   display: flex;
   flex-direction: column;
   gap: 2%;
@@ -72,7 +86,7 @@ body {
 
 .tag {
   font-weight: 700;
-  font-size: clamp(11px, 2.2vw, 17px);
+  font-size: 15px;
   letter-spacing: .04em;
   padding: 1px 6px;
   border: 1.5px solid var(--ink);
@@ -85,7 +99,7 @@ body {
 
 .txrx {
   font-weight: 800;
-  font-size: clamp(12px, 2.4vw, 18px);
+  font-size: 16px;
   padding: 1px 10px;
   border-radius: 3px;
   border: 1.5px solid var(--ink);
@@ -98,7 +112,7 @@ body {
 .freq { height: 100%; max-height: 120px; width: auto; max-width: 88%; }
 .freq .on { fill: var(--ink); }
 .freq .off { fill: var(--ghost); opacity: .55; }
-.unit { font-weight: 700; font-size: clamp(11px, 2vw, 16px); padding-bottom: 6px; }
+.unit { font-weight: 700; font-size: 14px; padding-bottom: 6px; }
 
 /* ---------------------------------------------------------------- meters */
 .meters { display: flex; flex-direction: column; justify-content: center; gap: 3px; height: 78px; flex: none; }
@@ -137,7 +151,7 @@ body {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
   padding: 20px 40px; text-align: center;
 }
-.nolink-title { font-size: clamp(22px, 5vw, 40px); font-weight: 800; letter-spacing: .12em; }
+.nolink-title { font-size: 34px; font-weight: 800; letter-spacing: .12em; }
 .nolink-msg { font-size: 13px; font-weight: 600; max-width: 560px; line-height: 1.4; min-height: 2.8em; }
 .nolink-status { font-size: 12px; font-weight: 700; opacity: .7; letter-spacing: .04em; }
 

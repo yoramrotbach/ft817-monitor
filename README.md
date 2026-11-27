@@ -34,6 +34,8 @@ A desktop CAT monitor for the **Yaesu FT-817, FT-817ND and FT-818**. It shows wh
 
 The LCD color follows the radio's own color setting (menu "Color": blue or amber), or you can pick amber, blue or a dark night mode.
 
+**Large display.** The whole LCD zooms with the window, so you can make it as big as you like. Text, meters and digits all grow together and keep their proportions. The window reopens at the size and position you left it. For full screen, press **F11** or double-click the LCD (on macOS also Control-Command-F); press it again or **Esc** to leave.
+
 ## Connecting
 
 **Direct serial.** Connect the radio's ACC jack to the computer with a CAT cable (CT-62 type or similar) or an interface such as the Digirig. In Settings, choose the port and the baud rate that matches the radio's CAT RATE menu setting (4800, 9600 or 38400). The link is fixed at 8 data bits, no parity, 2 stop bits.
