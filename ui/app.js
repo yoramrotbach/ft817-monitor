@@ -21,6 +21,12 @@
   delete cfg.host; delete cfg.tcpPort;
   const save = () => { try { localStorage.setItem("ft817mon", JSON.stringify(cfg)); } catch (_) {} };
 
+  // Only touch the DOM when a value actually changes. Rewriting an element
+  // under the mouse cancels clicks in WebKit (Linux and macOS), and the
+  // display updates about 25 times a second.
+  function setText(el, t) { t = t == null ? "" : String(t); if (el.textContent !== t) el.textContent = t; }
+  function setClass(el, c) { if (el.className !== c) el.className = c; }
+
   // ------------------------------------------------------------ meters
   function buildBar(el) {
     el.innerHTML = "";
@@ -38,8 +44,7 @@
     [...el.children].forEach((seg, i) => {
       const n = i + 1;
       const on = value != null && n <= value;
-      seg.className = on ? "on" : (peak != null && n === peak ? "peak" : "");
-      if (on && seg.dataset.over) seg.classList.add("over");
+      setClass(seg, on ? (seg.dataset.over ? "on over" : "on") : (peak != null && n === peak ? "peak" : ""));
     });
   }
 
@@ -74,7 +79,7 @@
   const flagEls = {};
   for (const [key, fn] of FLAGS) {
     const sp = document.createElement("span");
-    sp.textContent = fn({})?.text ?? key.toUpperCase();
+    setText(sp, fn({})?.text ?? key.toUpperCase());
     $("flags").appendChild(sp);
     flagEls[key] = sp;
   }
@@ -93,12 +98,12 @@
     last = s;
     // status bar
     const dot = $("dot");
-    dot.className = "dot " + s.link;
-    $("link-text").textContent = s.link === "lost" && s.retry_in ? `No link · retrying in ${s.retry_in} s` : { up: "Connected", connecting: "Connecting…", lost: "No link", stopped: "Stopped" }[s.link];
-    $("source").textContent = s.source || "Not connected";
-    $("rate").textContent = s.link === "up" ? `${Math.round(s.polls_per_sec)} polls/s` : "";
+    setClass(dot, "dot " + s.link);
+    setText($("link-text"), s.link === "lost" && s.retry_in ? `No link · retrying in ${s.retry_in} s` : { up: "Connected", connecting: "Connecting…", lost: "No link", stopped: "Stopped" }[s.link]);
+    setText($("source"), s.source || "Not connected");
+    setText($("rate"), s.link === "up" ? `${Math.round(s.polls_per_sec)} polls/s` : "");
     running = s.link !== "stopped";
-    $("connect-btn").textContent = running ? "Disconnect" : "Connect";
+    setText($("connect-btn"), running ? "Disconnect" : "Connect");
     $("connect-btn").classList.toggle("danger", running);
 
     // no-link overlay
@@ -106,27 +111,27 @@
     $("lcd").classList.toggle("dim", down);
     $("nolink").classList.toggle("hidden", !down);
     // While retrying after an error, keep saying NO LINK instead of flashing CONNECTING.
-    $("nolink-title").textContent = s.link === "connecting" && s.error ? "NO LINK" : ({ connecting: "CONNECTING", lost: "NO LINK", stopped: "STANDBY" }[s.link] || "");
+    setText($("nolink-title"), s.link === "connecting" && s.error ? "NO LINK" : ({ connecting: "CONNECTING", lost: "NO LINK", stopped: "STANDBY" }[s.link] || ""));
     // The error stays on screen through retries; attempts and the countdown
     // to the next one are shown on their own line underneath.
     if (s.link === "stopped") {
-      $("nolink-msg").textContent = "Press Connect, or open Settings (⚙) to choose the port.";
-      $("nolink-status").textContent = "";
+      setText($("nolink-msg"), "Press Connect, or open Settings (⚙) to choose the port.");
+      setText($("nolink-status"), "");
     } else {
-      $("nolink-msg").textContent = s.error || "";
-      $("nolink-status").textContent = s.message || "";
+      setText($("nolink-msg"), s.error || "");
+      setText($("nolink-status"), s.message || "");
     }
     if (down) return;
 
     if (s.lcd_color && s.lcd_color !== radioColor) { radioColor = s.lcd_color; applyTheme(); }
 
     renderFrequency($("freq"), s.freq_hz);
-    $("vfo").textContent = s.vfo ?? "VFO ?";
-    $("band").textContent = s.band ?? "—";
-    $("mode").textContent = s.mode ?? "—";
+    setText($("vfo"), s.vfo ?? "VFO ?");
+    setText($("band"), s.band ?? "—");
+    setText($("mode"), s.mode ?? "—");
 
     const txrx = $("txrx");
-    txrx.textContent = s.tx ? "TX" : "RX";
+    setText(txrx, s.tx ? "TX" : "RX");
     txrx.classList.toggle("tx", s.tx);
     $("busy").classList.toggle("off", s.tx || s.squelched !== false);
 
@@ -134,22 +139,22 @@
     $("tx-meter").classList.toggle("hidden", !s.tx);
     if (s.tx) {
       setBar("po", s.po);
-      $("poval").textContent = s.po ?? "—";
-      setBar("swr", s.swr); $("swrval").textContent = s.swr ?? "—";
-      setBar("alc", s.alc); $("alcval").textContent = s.alc ?? "—";
-      setBar("mod", s.modulation); $("modval").textContent = s.modulation ?? "—";
+      setText($("poval"), s.po ?? "—");
+      setBar("swr", s.swr); setText($("swrval"), s.swr ?? "—");
+      setBar("alc", s.alc); setText($("alcval"), s.alc ?? "—");
+      setBar("mod", s.modulation); setText($("modval"), s.modulation ?? "—");
     } else {
       const v = s.s_raw ?? 0;
       setBar("sbar", s.s_raw, sPeak(v));
-      $("sval").textContent = s.s_label ?? "—";
+      setText($("sval"), s.s_label ?? "—");
     }
 
     for (const [key, fn] of FLAGS) {
       const r = fn(s);
       const el = flagEls[key];
-      if (r == null) { el.className = "na"; continue; }
-      el.textContent = r.text;
-      el.className = r.alert ? (r.on ? "alert" : "gone") : (r.on ? "on" : "off");
+      if (r == null) { setClass(el, "na"); continue; }
+      setText(el, r.text);
+      setClass(el, r.alert ? (r.on ? "alert" : "gone") : (r.on ? "on" : "off"));
     }
   }
 
