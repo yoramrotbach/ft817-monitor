@@ -21,13 +21,13 @@ Sources:
 
 ## Decoding
 
-**`03` frequency/mode.** Bytes 0–3 are packed BCD, MSB first, in 10 Hz units (`01 40 74 00` = 14.074.00 MHz). Byte 4 is the mode: `00` LSB, `01` USB, `02` CW, `03` CWR, `04` AM, `06` WFM, `08` FM, `0A` DIG, `0C` PKT. Bit 7 set means narrow (for example `82` = CW-N, `88` = FM-N). **A real FT-817ND reports PKT as `FC`**, which the published sources don't mention; the app treats both `0C` and `FC` as PKT, and shows any other unknown value as `?xx` without a narrow flag.
+**`03` frequency/mode.** Bytes 0–3 are packed BCD, MSB first, in 10 Hz units (`01 40 74 00` = 14.074.00 MHz). Byte 4 is the mode: `00` LSB, `01` USB, `02` CW, `03` CWR, `04` AM, `06` WFM, `08` FM, `0A` DIG, `0C` PKT. Bit 7 set means narrow (for example `82` = CW-N, `88` = FM-N). **A real radio reports PKT as `FC`** (one of the two test radios; which one wasn't recorded), which the published sources don't mention; the app treats both `0C` and `FC` as PKT, and shows any other unknown value as `?xx` without a narrow flag.
 
 **`F7` TX status.** The radio answers `FF` in receive; Hamlib uses this to detect PTT, and so does this app. In transmit: bits 0–3 = power output (0–15), bit 6 = high SWR. Bit 5 (split) is **not used**: [K] notes reports that bits 5 and 7 may be swapped. Split comes from EEPROM `7A` instead.
 
 **`E7` RX status** (valid in receive only). Bits 0–3 = S-meter (0–9 = S0–S9, 10 = S9+10 dB … 15 = S9+60 dB); bit 5 = FM discriminator off-center; bit 6 = CTCSS/DCS enabled but not matched; bit 7 = squelched.
 
-**`BD` TX meters.** Two bytes, four nibbles. Published sources disagree on the layout. The app uses the one that matched the radio's own meters on a real FT-817ND:
+**`BD` TX meters.** Two bytes, four nibbles. Published sources disagree on the layout. The app uses the one that matched the radio's own meters on one of the two test radios (which one wasn't recorded):
 
 | byte 0 high | byte 0 low | byte 1 high | byte 1 low |
 |---|---|---|---|
@@ -40,7 +40,7 @@ Field test (Nov 2026, direct serial, radio's METER switched between SWR, ALC and
 | Addr | Bits | Meaning | Source |
 |---|---|---|---|
 | `55` | 0 VFO A/B · 1 MTQMB · 2 QMB · 4 HOME · 5 MTUNE · 7 VFO(1)/MEM(0) | VFO/memory state | K, H (bit 0) |
-| `57` | 1-0 AGC (Auto/Fast/Slow/Off) · 2 DSP · 4 PBT · 5 NB · 6 LOCK · 7 FST. **On real FT-817NDs bit 6 is 0 when LOCK is on** (KA7OEI documents the opposite) | panel | K + field |
+| `57` | 1-0 AGC (Auto/Fast/Slow/Off) · 2 DSP · 4 PBT · 5 NB · 6 LOCK · 7 FST. **On both test radios (FT-817ND and FT-817) bit 6 is 0 when LOCK is on** (KA7OEI documents the opposite) | panel | K + field |
 | `58` | 1-0 meter mode (PWR/ALC/SWR/MOD) · 4 KYR · 5 BK · 6 VLT · 7 VOX | panel | K |
 | `5B` | 4 LCD color (0 blue, 1 amber) | display | K |
 | `65` | 7-5 DIG sub-mode (RTTY, PSK-L, PSK-U, USER-L, USER-U) | read only in DIG | K, H |
@@ -56,12 +56,12 @@ Field test (Nov 2026, direct serial, radio's METER switched between SWR, ALC and
 | Fact | Source | How the app uses it |
 |---|---|---|
 | Valid addresses are 0x0000–0x1925; reading past the end returns a single `00` | K | The backup reads exactly 0x0000–0x1925 and never asks past the end: on a real FT-817 the out-of-range reply was not a single `00` (field report, Nov 2026), so probing for the end was unreliable |
-| 0x00–0x03 are described as an integrity checksum; changing them can wipe the EEPROM, calibration included. On the two FT-817NDs tested they are a fixed `A5 5A A5 5A` (see field notes below) | K | `write_frame()` refuses any address below 0x06 (unit tested); the simulator wipes itself if those bytes change |
+| 0x00–0x03 are described as an integrity checksum; changing them can wipe the EEPROM, calibration included. On the two radios tested (FT-817ND and FT-817) they are a fixed `A5 5A A5 5A` (see field notes below) | K | `write_frame()` refuses any address below 0x06 (unit tested); the simulator wipes itself if those bytes change |
 | 0x04–0x05 identify the hardware version | K | A restore is refused if they differ between backup and radio |
 | 0x07–0x52 = soft-cal menu items 1–76 (address = item + 6); VCC calibration at 0x53; items 75–76 are signed | K | Shown by name in the app; counted as "calibration" in the restore summary |
 | 0x64 bits 7–6 = CAT rate (00 = 4800, 01 = 9600, 10 = 38400) | K | Kept at the radio's current value during a restore |
 | No checksum on the serial link; the radio can miss commands while busy | K | Two-pass reads with re-reads; every write read back, up to 3 tries; full read-back at the end |
-| The FT-817 may stop answering CAT while the dial is LOCKed | K | Restore and backup refuse to start while LOCK is on, as a precaution. (The two FT-817NDs tested answered normally while locked.) |
+| The FT-817 may stop answering CAT while the dial is LOCKed | K | Restore and backup refuse to start while LOCK is on, as a precaution. (The two radios tested answered normally while locked.) |
 
 Region labels in the restore summary (calibration, settings, VFOs/home, memories) follow the FT-817 map and are approximate on the FT-818.
 
@@ -75,20 +75,20 @@ Commands used: `f`, `m`, `t`, `v`, `s`, `l RAWSTR` (receive), `\get_dcd`, and `l
 
 ## Field notes from real radios (Nov 2026)
 
-Two FT-817ND radios, both unmodified, bought from different owners:
+Two unmodified radios, bought from different owners: "Upper", an FT-817ND, and "Lower", an original FT-817. (Until Nov 28, 2026, these notes described both as FT-817NDs; Lower's label says FT-817.)
 
 - Bytes 0x00–0x03 read `A5 5A A5 5A` on both radios, so they look like a fixed marker rather than a per-radio checksum. The app still never writes them.
-- Version bytes (0x04–0x05) differ between the two: `CE BF` and `D8 BF`.
+- Version bytes (0x04–0x05) differ between the two: `CE BF` on Lower (FT-817) and `D8 BF` on Upper (FT-817ND). With only two radios, it isn't known whether they identify the model.
 - The dial LOCK bit (0x57 bit 6) is reversed from KA7OEI's map on both radios: 0 = locked, 1 = unlocked.
 - In SSB, and at the moment of keying, the E7 tone and discriminator bits can be set; the app shows TONE? and OFF-FREQ only in FM, FM-N and PKT receive.
 - 64 of the 76 soft-calibration values differ between the two radios. This is the basis for the app's "most likely another radio" warning (threshold: more than 8 differing values).
-- The first radio tested did not answer an EEPROM read past 0x1925 with the single `00` byte described in published sources, so the app now reads exactly 0x0000–0x1925 and never asks past the end.
+- The first radio tested (which one wasn't recorded) did not answer an EEPROM read past 0x1925 with the single `00` byte described in published sources, so the app now reads exactly 0x0000–0x1925 and never asks past the end.
 
-Not tested: the original FT-817 and the FT-818.
+Not tested: the FT-818.
 
 ## Why Hamlib rigctld support was removed (Nov 2026)
 
-Tested with Hamlib 4.7.2 on Windows and a real FT-817ND:
+Tested with Hamlib 4.7.2 on Windows and one of the two test radios:
 
 - PKT (`FC`) isn't recognized, so Hamlib reports no mode. FM-N isn't reported as narrow, because the driver lists no narrow FM filter.
 - Meters come through Hamlib's calibration tables; MOD isn't available and ALC saturates at raw 5.

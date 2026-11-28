@@ -9,7 +9,7 @@ Two free desktop apps for the **Yaesu FT-817, FT-817ND and FT-818**, for Windows
 
 They are separate apps on purpose: the monitor contains no code that can write to the radio.
 
-> **Tested radios.** Both apps have been tested on real hardware with two **FT-817ND** radios only. They have **not** been tested on the original **FT-817** or on the **FT-818** (sold as FT-818ND). Support for those models is based on published documentation, not on testing. If you own one, please test with care and report what you find.
+> **Tested radios.** Both apps have been tested on real hardware with two radios: an **FT-817ND** and an original **FT-817**. Not every feature was checked on both radios. They have **not** been tested on the **FT-818** (sold as FT-818ND); support for it is based on published documentation, not on testing. If you own one, please test with care and report what you find.
 
 # 817 Monitor
 
@@ -52,7 +52,7 @@ Power output always works. SWR, ALC and MOD need the undocumented command `0xBD`
 
 Why it's optional: `0xBE`, one value away, is the factory reset, which erases the radio's calibration. The app cannot send `0xBE` (it is blocked in code and covered by a unit test), but a noisy cable could in theory corrupt a byte in transit. With a decent cable the risk is very low, and hardware displays have used `0xBD` for years.
 
-Published sources disagree on how the `0xBD` reply is packed. The app uses the layout that matched the radio's own SWR, ALC and MOD meters on a real FT-817ND. It hasn't been checked on an FT-818; if your meters don't match the radio's, please report it.
+Published sources disagree on how the `0xBD` reply is packed. The app uses the layout that matched the radio's own SWR, ALC and MOD meters on one of the test radios. It hasn't been checked on an FT-818; if your meters don't match the radio's, please report it.
 
 # 817 EEPROM
 
@@ -70,7 +70,7 @@ The FT-817's EEPROM holds everything the radio knows about itself, including the
 |---|---|
 | Addresses 0x00–0x05 are never written | 0–3 hold a fixed marker (`A5 5A A5 5A` on both radios tested). Published sources call these bytes a checksum and warn that changing them can make the radio wipe its EEPROM, so the app never touches them. 4–5 identify the hardware version. |
 | Refuses a backup whose version bytes differ from the radio's | Stops a restore from another model or variant. |
-| Warns when the backup is most likely from **another radio**: more than 8 of the 76 calibration values differ from the radio's | A radio's own backup normally matches its calibration exactly. Two FT-817NDs compared in testing differed in 64 of 76 values. To go ahead anyway you must type DIFFERENT RADIO. |
+| Warns when the backup is most likely from **another radio**: more than 8 of the 76 calibration values differ from the radio's | A radio's own backup normally matches its calibration exactly. The two radios compared in testing (an FT-817ND and an FT-817) differed in 64 of 76 values. To go ahead anyway you must type DIFFERENT RADIO. |
 | A fresh backup of the radio is saved before anything is written | Every restore can be undone. |
 | Only bytes that differ are written; each is read back, with retries | Usually a few dozen writes instead of thousands; stops if writes stop verifying. |
 | The radio's current CAT baud rate (0x64 bits 7–6) is kept | Restoring a different rate would cut the link halfway through. |

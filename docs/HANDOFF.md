@@ -4,7 +4,9 @@ As of Nov 27, 2026 · Yoram (4Z1YR). The same handoff is also kept as a Claude d
 
 ## Summary
 
-Version 0.1.0 of both apps was released publicly on GitHub on Nov 27, 2026, and the project is closed for now. Both apps were verified on real hardware with two FT-817ND radios.
+Version 0.1.0 of both apps was released publicly on GitHub on Nov 27, 2026, and the project is closed for now. Both apps were verified on real hardware with two radios: "Upper", an FT-817ND, and "Lower", an original FT-817.
+
+> **Correction (Nov 28, 2026):** until this date, these documents described both radios as FT-817NDs. Lower's label says FT-817 (not ND). Where a finding names a radio, that name is right; where it says only "a real FT-817ND", which radio was used wasn't recorded.
 
 - **817 Monitor** is a large, resizable desktop display of what the radio is doing, a look-alike of the classic Arduino CAT display boxes. It only reads from the radio.
 - **817 EEPROM** backs up and restores the radio's EEPROM (memories, settings and the 76 soft-calibration values) with verified writes and several safeguards.
@@ -53,7 +55,7 @@ Two Tauri v2 desktop apps (Rust back end, plain HTML/CSS/JS front end) share one
 
 ```
  817 Monitor ──── reads only ─────►┐
-                                   │  ft817-cat library  ◄── CAT ──►  FT-817ND
+                                   │  ft817-cat library  ◄── CAT ──►  FT-817 / ND
  817 EEPROM ◄─── reads + writes ──►┘  (frames, decoders,              (USB serial, e.g. Digirig,
  (the only code that writes)           serial, simulated radio)         RTS/DTR held low)
 ```
@@ -62,11 +64,11 @@ Two Tauri v2 desktop apps (Rust back end, plain HTML/CSS/JS front end) share one
 - **817 EEPROM** reads 0x0000–0x1925 twice and reconciles differences; a restore writes only differing bytes, verifies each, and keeps bytes 0x00–0x05 and the radio's CAT rate. Backups are `.817ee` JSON files with a SHA-256 checksum, saved automatically in the app's data folder.
 - **The simulated radio** behaves like a real FT-817 down to wiping itself if the header is written, so the safeguards are tested without a radio.
 
-## FT-817ND findings that differ from published sources
+## Radio findings that differ from published sources
 
-Testing on two FT-817NDs ("Lower" and "Upper", both unmodified) contradicted the published documentation in six places; the apps follow the radios. All are recorded in docs/PROTOCOL.md.
+Testing on two unmodified radios, "Upper" (FT-817ND) and "Lower" (original FT-817), contradicted the published documentation in six places; the apps follow the radios. All are recorded in docs/PROTOCOL.md.
 
-| Item | Published sources say | Real FT-817ND does | How the apps handle it |
+| Item | Published sources say | The real radios do | How the apps handle it |
 | --- | --- | --- | --- |
 | TX meter reply `0xBD` | KA7OEI: PWR\|SWR, MOD\|ALC | PWR\|ALC, SWR\|MOD, checked against the radio's own meters | Fixed layout; the layout setting was removed |
 | PKT mode code (`0x03` reply) | `0x0C` | `0xFC` | Both codes shown as PKT; unknown codes never get "-N" |
@@ -77,7 +79,7 @@ Testing on two FT-817NDs ("Lower" and "Upper", both unmodified) contradicted the
 
 **Radio facts worth keeping:**
 
-- Version bytes (0x04–0x05): Lower `CE BF`, Upper `D8 BF`.
+- Version bytes (0x04–0x05): Lower (FT-817) `CE BF`, Upper (FT-817ND) `D8 BF`. With only two radios, it isn't known whether these bytes identify the model.
 - 64 of the 76 calibration values differ between the two radios. Factory calibration varies widely: Lower has transmit gain 255 on 6 m and UHF, Upper has much higher HF power settings; both are factory values.
 - The radios' band memories start below the ham bands (30 m slot at 10.000 MHz, 17 m at 18.000 MHz), so the Monitor shows GEN there. That was reviewed and left as is.
 - TONE? and OFF-FREQ (E7 bits 6 and 5) were set in SSB and at key-up, so they're shown only in FM, FM-N and PKT receive. Their FM behavior hasn't been checked against a real off-tone or off-frequency signal.
@@ -134,7 +136,8 @@ Nothing is blocking; these are the known gaps, most useful first.
 - [ ] **TX meters on Linux and Raspberry Pi:** compare against the radio's own meters, as was done on Windows.
 - [ ] **Decide on the lock check for backups:** the radios answered normally while locked, so the check could be dropped for backups (read-only) and kept for restores.
 - [ ] **Option B (deferred):** the Monitor shares the radio with WSJT-X or a logger by acting as a Hamlib-compatible network server, forwarding only the commands those programs need, off by default. A larger job that would end the Monitor's read-only design.
-- [ ] **Not tested at all:** the original FT-817 and the FT-818. If anyone reports results, the first things to check are the meter layout, the PKT code and the LOCK bit.
+- [ ] **Not tested at all:** the FT-818. If anyone reports results, the first things to check are the meter layout, the PKT code and the LOCK bit.
+- [ ] **Original FT-817:** Lower is one, so the LOCK bit, the header bytes and EEPROM backup were checked on it. Which radio was used for the meter, PKT and end-of-EEPROM findings wasn't recorded, so those are confirmed on at least one of the two radios only.
 
 ## Working agreements and how to resume
 
